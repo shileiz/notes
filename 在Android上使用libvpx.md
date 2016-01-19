@@ -117,8 +117,7 @@ libvpx 使用 libwebm 的时候，给 libwebm 外面又封装了一层，使得�
 * 编译 libvpx.a，参考另一篇笔记《编译Android上的静态库》里面有详细的步骤可以得到 `libvpx.a`
 * 新建Android项目，添加 Native Support，自己的库起名 mydecode。自动生成的 `mydecode.cpp` 改为 `mydecode.c`
 * MainActivity 里添加 native 方法，让 native 方法跑在单独的线程里不要阻塞UI线程以免引起不必要的麻烦。修改后的MainActivity跟上文一样。  
-* 把 `libwebm.a`， `libvpx.a` 和 libvpx 目录下的所有源文件以及子目录(其实可以有选择性的拷贝的)拷贝到jni目录。把config libvpx时生成`vpx_config.h`拷贝到jni目录。
-* 修改Android.mk文件，添加 `libwebm.a`， `libvpx.a`， `vpxdec.c` 以及 vpxdec.c 用到的，没有编译到 libvpx.a 里的其他 .c 文件。  
+* 把 `libwebm.a`， `libvpx.a` 和 libvpx 目录下的所有源文件(不包括子目录里的)拷贝到jni目录，并在Android.mk里把他们都加进去  
 修改后的 Android.mk 如下：
 
 		LOCAL_PATH := $(call my-dir)
@@ -151,10 +150,11 @@ libvpx 使用 libwebm 的时候，给 libwebm 外面又封装了一层，使得�
 		#LOCAL_SRC_FILES += $(libyuv_src_files)
 		LOCAL_STATIC_LIBRARIES := pre-st-libvpx pre-st-libwebm
 		include $(BUILD_SHARED_LIBRARY)
-
+* 把以下头文件拷贝到jni目录下。（跟使用 libwebm 是一样的，这就不再写一遍了。）
 * 说明，vpxdec.c 跟 libyuv 有关系，直接 Build Android 项目时会报错。关于 libyuv 有以下两种解决方案：
 	* 方案一: 把libyuv的源文件放到Android项目里编译一遍。（就是以上Android.mk注释掉的部分）。比较麻烦，但也实验成功了。需要做以下工作：
 		* 在Android.mk加上libyuv的源文件（即打开Android.mk注释掉的部分）
+		* 把libyuv相关的源码拷贝到jni对应目录下
 		* 修改一下libyuv的目录结构，把原来在 include 里的 libyuv 挪到 libyuv/source 里。挪完了之后的目录结构是这样：  
 			`jni/third_party/libyuv/source`  
 			source里面是.cc源文件和文件夹libyuv，文件夹libyuv里是头文件。
