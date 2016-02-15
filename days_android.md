@@ -77,6 +77,16 @@ am ： activity manager
 start 后面跟的是一个 <INTENT> 参数  
 这个参数要用 package\_name/activity\_name 的形式  
 那么如何知道一个app的package name 呢？  
+
+	* 在程序里得到 am start 传入的参数：
+	* 首先要使用 -e 参数传入参数 （此时要使用 -n 参数来指定Activity名，而不是像上面不写参数）
+	* `adb shell am start -n com.example.test/.TestActivity -e content /sdcard/rmhd/a.rmhd`
+	* -e 后面连续跟两个东西，以空格分开，分别是参数的key和value
+	* 在代码里这么得到这个value： 
+	*  
+				Intent i = getIntent();
+        		String content = i.getStringExtra("content");
+
 * adb shell pm  
 pm ： package manager   
 列出所有 package 的命令：  
