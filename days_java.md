@@ -132,8 +132,8 @@ python2.x的read()，是file-like object的方法，它是用参数来指定读�
 返回值是python2.x的str，也就是byte sequence。（python2.x 的str实际上byte sequence）  
 python2.x 的read()底层调用的就是C的fread()  
 C语言的fread()  
-头文件：#include <stdio.h>  
-函数原型：size_t fread (void *buffer, size_t size, size_t count, FILE *stream);  
+头文件：`#include <stdio.h>`  
+函数原型：`size_t fread (void *buffer, size_t size, size_t count, FILE *stream); ` 
 参数：  
 buffer  用于接收数据的内存地址  
 size  要读的每个数据项的字节数，单位是字节  
