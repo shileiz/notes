@@ -2,6 +2,16 @@
 * 大多数广播都是 Android 系统发送的，我们自己发送广播的情况很少
 * Android 系统几乎在所有系统状态改变时都会发送广播，为程序员提供了很大方便。
 * 比如电量改变、收发短信、拨打电话、解锁屏幕、开机完成、SD卡状态改变，安装卸载软件。。。等等的时候，系统都会发送广播
+### 有序广播和无序广播
+* `Context.sendBroadcast(Intent intent)`  发送的是无序广播
+* `Context.sendOrderedBroadcast(...)` 发送的是有序广播
+* 无序广播：所有跟广播的intent匹配的广播接收者都可以收到该广播，并且是没有先后顺序（视为同时收到）
+* 有序广播：按照广播接收者的优先级来决定接收的先后顺序，如果优先级高的接收者把该广播abort了，则剩下的接收者就收不到了
+	* 优先级的定义：-1000~1000
+	* 最终接收者：所有广播接收者都接收到广播之后，它才接收，并且一定会接收
+		* 最终接收者是在发送有序广播时指定的，所以该接收者不用在清单文件中配置
+		* `sendOrderedBroadcast` 的第三个参数 `BroadcastReceiver resultReceiver` 就是用来指定最终接收者的
+	* abortBroadCast：阻止其他接收者接收这条广播，类似拦截，只有有序广播可以被拦截
 ### 广播接收者
 * 即使广播接收者的进程没有启动，当系统发送的广播可以被该接收者接收时，系统会自动启动该接收者所在的进程 
 * 启动该接收者所在的进程，就是启动你的安卓项目：com.xxx.xxx
@@ -27,13 +37,13 @@
 * 不同的广播，封装数据的方法不一样，所以从广播中得到数据的方法也不一样
 * 对于系统广播，我们只能查文档去看广播发送时怎么封装数据的
 * 下面举两个例子：
-* 对于打电话广播
-	* 系统把播出的电话号码以一个String封装了起来，可以调用 BroadcastReceiver 的 `getResultData()` 方法来取得
-
-* 对于收到短信广播
-	* 打发打发
-* 根据官方API，拿到的是上个广播接收者 `setResultData(String data)` 的结果
-* 我们也不知道上一个收到打电话广播的是谁，应该是系统的某个app
-* 但我们 `setResultData()` 之后，打电话app再收到这个广播，再 `getResultData()` 到的号码，就是我们设置的新号码了
-* 总之 Android 系统往外打电话那个app，是在我们的app之后才收到 `NEW_OUTGOING_CALL `这个广播的
-* 这才能保证我们改号码成功了
+	1. 对于打电话广播
+		* 系统把播出的电话号码以一个String封装了起来，可以调用 BroadcastReceiver 的 `getResultData()` 方法来取得
+		* 注意，只有有序广播才能通过这个方法获得数据。这个方法得到的String是上一个 BroadcastReceiver 用 `setResultData()` 设置的
+	* 对于收到短信广播
+		* 系统把短信数据封装到了intent里，作为Extra，以Bundle的数据结构封装进去的
+		* `onReceive(Context context, Intent intent)` 的第二个参数收到的就是启动本次广播的那个intent
+		* 以下代码得到封装了短信数据的Bundle
+				
+				Bundle bundle = intent.getExtras();
+		* 短信的具体格式不是本节重点这里不记了，需要的去查原版笔记
