@@ -1,0 +1,515 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>在Android上使用libvpx</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<style type="text/css">
+/* GitHub stylesheet for MarkdownPad (http://markdownpad.com) */
+/* Author: Nicolas Hery - http://nicolashery.com */
+/* Version: b13fe65ca28d2e568c6ed5d7f06581183df8f2ff */
+/* Source: https://github.com/nicolahery/markdownpad-github */
+
+/* RESET
+=============================================================================*/
+
+html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address, big, cite, code, del, dfn, em, img, ins, kbd, q, s, samp, small, strike, strong, sub, sup, tt, var, b, u, i, center, dl, dt, dd, ol, ul, li, fieldset, form, label, legend, table, caption, tbody, tfoot, thead, tr, th, td, article, aside, canvas, details, embed, figure, figcaption, footer, header, hgroup, menu, nav, output, ruby, section, summary, time, mark, audio, video {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* BODY
+=============================================================================*/
+
+body {
+  font-family: Helvetica, arial, freesans, clean, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #333;
+  background-color: #fff;
+  padding: 20px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+body>*:first-child {
+  margin-top: 0 !important;
+}
+
+body>*:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* BLOCKS
+=============================================================================*/
+
+p, blockquote, ul, ol, dl, table, pre {
+  margin: 15px 0;
+}
+
+/* HEADERS
+=============================================================================*/
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 20px 0 10px;
+  padding: 0;
+  font-weight: bold;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 tt, h1 code, h2 tt, h2 code, h3 tt, h3 code, h4 tt, h4 code, h5 tt, h5 code, h6 tt, h6 code {
+  font-size: inherit;
+}
+
+h1 {
+  font-size: 28px;
+  color: #000;
+}
+
+h2 {
+  font-size: 24px;
+  border-bottom: 1px solid #ccc;
+  color: #000;
+}
+
+h3 {
+  font-size: 18px;
+}
+
+h4 {
+  font-size: 16px;
+}
+
+h5 {
+  font-size: 14px;
+}
+
+h6 {
+  color: #777;
+  font-size: 14px;
+}
+
+body>h2:first-child, body>h1:first-child, body>h1:first-child+h2, body>h3:first-child, body>h4:first-child, body>h5:first-child, body>h6:first-child {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+a:first-child h1, a:first-child h2, a:first-child h3, a:first-child h4, a:first-child h5, a:first-child h6 {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+h1+p, h2+p, h3+p, h4+p, h5+p, h6+p {
+  margin-top: 10px;
+}
+
+/* LINKS
+=============================================================================*/
+
+a {
+  color: #4183C4;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* LISTS
+=============================================================================*/
+
+ul, ol {
+  padding-left: 30px;
+}
+
+ul li > :first-child, 
+ol li > :first-child, 
+ul li ul:first-of-type, 
+ol li ol:first-of-type, 
+ul li ol:first-of-type, 
+ol li ul:first-of-type {
+  margin-top: 0px;
+}
+
+ul ul, ul ol, ol ol, ol ul {
+  margin-bottom: 0;
+}
+
+dl {
+  padding: 0;
+}
+
+dl dt {
+  font-size: 14px;
+  font-weight: bold;
+  font-style: italic;
+  padding: 0;
+  margin: 15px 0 5px;
+}
+
+dl dt:first-child {
+  padding: 0;
+}
+
+dl dt>:first-child {
+  margin-top: 0px;
+}
+
+dl dt>:last-child {
+  margin-bottom: 0px;
+}
+
+dl dd {
+  margin: 0 0 15px;
+  padding: 0 15px;
+}
+
+dl dd>:first-child {
+  margin-top: 0px;
+}
+
+dl dd>:last-child {
+  margin-bottom: 0px;
+}
+
+/* CODE
+=============================================================================*/
+
+pre, code, tt {
+  font-size: 12px;
+  font-family: Consolas, "Liberation Mono", Courier, monospace;
+}
+
+code, tt {
+  margin: 0 0px;
+  padding: 0px 0px;
+  white-space: nowrap;
+  border: 1px solid #eaeaea;
+  background-color: #f8f8f8;
+  border-radius: 3px;
+}
+
+pre>code {
+  margin: 0;
+  padding: 0;
+  white-space: pre;
+  border: none;
+  background: transparent;
+}
+
+pre {
+  background-color: #f8f8f8;
+  border: 1px solid #ccc;
+  font-size: 13px;
+  line-height: 19px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: 3px;
+}
+
+pre code, pre tt {
+  background-color: transparent;
+  border: none;
+}
+
+kbd {
+    -moz-border-bottom-colors: none;
+    -moz-border-left-colors: none;
+    -moz-border-right-colors: none;
+    -moz-border-top-colors: none;
+    background-color: #DDDDDD;
+    background-image: linear-gradient(#F1F1F1, #DDDDDD);
+    background-repeat: repeat-x;
+    border-color: #DDDDDD #CCCCCC #CCCCCC #DDDDDD;
+    border-image: none;
+    border-radius: 2px 2px 2px 2px;
+    border-style: solid;
+    border-width: 1px;
+    font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+    line-height: 10px;
+    padding: 1px 4px;
+}
+
+/* QUOTES
+=============================================================================*/
+
+blockquote {
+  border-left: 4px solid #DDD;
+  padding: 0 15px;
+  color: #777;
+}
+
+blockquote>:first-child {
+  margin-top: 0px;
+}
+
+blockquote>:last-child {
+  margin-bottom: 0px;
+}
+
+/* HORIZONTAL RULES
+=============================================================================*/
+
+hr {
+  clear: both;
+  margin: 15px 0;
+  height: 0px;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  border-bottom: 4px solid #ddd;
+  padding: 0;
+}
+
+/* TABLES
+=============================================================================*/
+
+table th {
+  font-weight: bold;
+}
+
+table th, table td {
+  border: 1px solid #ccc;
+  padding: 6px 13px;
+}
+
+table tr {
+  border-top: 1px solid #ccc;
+  background-color: #fff;
+}
+
+table tr:nth-child(2n) {
+  background-color: #f8f8f8;
+}
+
+/* IMAGES
+=============================================================================*/
+
+img {
+  max-width: 100%
+}
+</style>
+</head>
+<body>
+<p>libvpx 不包括webm文件的解析，只负责编解码。<br />
+解析webm需要用到 libwebm。<br />
+libwebm 在源码目录的：<code>libvpx/third_party/libwebm</code><br />
+libwebm 可以单独编译成一个库。<br />
+libvpx 使用了库 libwebm（可选，可以在config的时候打开或者关闭webm-io）。<br />
+libvpx 使用 libwebm 的时候，给 libwebm 外面又封装了一层，使得用起来更加方便。封装在: <code>libvpx/webmenc.cc</code>  和 <code>libvpx/webmdec.cc</code>。相应的头文件也在同文件夹下。<br />
+类似的封装还有其他几个，c++源文件和头文件也都在libvpx根目录下。<br />
+我们使用 libvpx 解码是参考 <code>libvpx/vpxdec.c</code>。<br />
+它在处理webm文件时，就是直接使用 <code>libvpx/webmenc.cc</code> 中的函数。<br />
+然后它在解码时，使用的是 libvpx 中的函数。  </p>
+<hr />
+<h1>使用 libwebm</h1>
+<h3>大体思路</h3>
+<ul>
+<li>把 libwebm.a 提前编译出来</li>
+<li>在自己的 Android 项目中使 libwebm.a，但不是直接调用库里面的函数，而是通过 webmdec.cc 间接地使用</li>
+<li>所以要把 webmdec.cc 放到自己的 Android 项目里。</li>
+<li>仿照 vpxdec.c，调用一下 webmdec.cc 里的东西，如果成功了，则说明使用成功。</li>
+</ul>
+<h3>详细步骤</h3>
+<ul>
+<li>先把 libwebm 编成库文件，参考另一篇笔记《编译Android上的静态库》里面有详细的步骤可以得到 <code>libwebm.a</code></li>
+<li>新建Android项目，添加 Native Support，自己的库起名 mydecode。自动生成的 <code>mydecode.cpp</code> 改为 <code>mydecode.c</code></li>
+<li>
+<p>MainActivity 里添加 native 方法，让 native 方法跑在单独的线程里不要阻塞UI线程以免引起不必要的麻烦。<br />
+修改后的 MainActivity.java 如下：  
+</p>
+<pre><code>public class MainActivity extends Activity {
+
+    static {System.loadLibrary(&quot;mydecode&quot;);}
+
+    Handler handler=null;
+
+    public native int mydecode();
+
+    @SuppressLint(&quot;HandlerLeak&quot;)
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        handler = new Handler(){
+            public void handleMessage(Message msg) {
+                Toast.makeText(MainActivity.this, &quot;return code: &quot;+msg.arg1, Toast.LENGTH_SHORT).show();
+            }
+        };
+    }
+
+    public void click(View v){
+        new Thread(){
+            public void run() {
+                int r = mydecode();
+                Message msg = new Message();
+                msg.arg1 = r;
+                handler.sendMessage(msg);
+            }   
+        }.start();
+    }
+}
+</code></pre>
+
+</li>
+<li>
+<p>把 <code>libwebm.a</code> 和 <code>webmdec.cc</code> 拷贝到jni目录，修改Android.mk文件，把这两个东西添加进去。<br />
+修改后的Android.mk:</p>
+<pre><code>LOCAL_PATH := $(call my-dir)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE    := pre-st-libwebm
+LOCAL_SRC_FILES := libwebm.a
+include $(PREBUILT_STATIC_LIBRARY)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE    := mydecode
+LOCAL_SRC_FILES := mydecode.c
+LOCAL_SRC_FILES += webmdec.cc
+LOCAL_STATIC_LIBRARIES := pre-st-libwebm
+include $(BUILD_SHARED_LIBRARY)
+</code></pre>
+
+</li>
+<li>
+<p>把以下头文件拷贝到jni目录下（保持原有目录结构，目录层级：jni相当于libvpx）：</p>
+<pre><code>libvpx目录下的所有.h
+执行config时生成的vpx_config.h（见编译libvpx部分）
+libvpx/vpx 目录下的所有头文件
+libvpx/vpx_ports 目录下的所有头文件
+libvpx/third_party/libwebm 目录下的所有头文件
+</code></pre>
+
+</li>
+<li>
+<p>native 方法的实现如下(完全仿照 vpxdec.c 写的最简单的调用 libwebm 的示例)： </p>
+<pre><code>/*  mydecode.c */
+#include &lt;jni.h&gt;
+#include &quot;webmdec.h&quot;
+
+JNIEXPORT jint JNICALL Java_com_zsl_useprebuiltstlibwebm_MainActivity_mydecode
+  (JNIEnv *env, jobject obj)
+{
+    struct VpxInputContext vpx_input_ctx;
+    struct WebmInputContext webm_ctx;
+    memset(&amp;(webm_ctx), 0, sizeof(webm_ctx));
+    FILE    *infile;
+    infile = fopen(&quot;/sdcard/test.webm&quot;, &quot;rb&quot;);
+    vpx_input_ctx.file = infile;
+    file_is_webm(&amp;webm_ctx, &amp;vpx_input_ctx);
+    if (webm_guess_framerate(&amp;webm_ctx, &amp;vpx_input_ctx))
+        return 0; // guess frame rate failed
+    else return 1; // guess frame rate success
+
+}
+</code></pre>
+
+</li>
+<li>
+<p>Application.mk 如下：</p>
+<pre><code>APP_ABI := armeabi-v7a
+APP_STL := stlport_static
+</code></pre>
+
+</li>
+</ul>
+<hr />
+<h1>使用 libvpx</h1>
+<h3>大体思路</h3>
+<ul>
+<li>提前编译好 libvpx.a， libwebm.a</li>
+<li>通过 vpxdec.c 来使用该库(而 vpxdec.c 用到了同目录下的其他 .c/.cc 等文件，所以要都加入 Android 项目)</li>
+</ul>
+<h3>详细步骤</h3>
+<ul>
+<li>编译 libvpx.a，参考另一篇笔记《编译Android上的静态库》里面有详细的步骤可以得到 <code>libvpx.a</code></li>
+<li>新建Android项目，添加 Native Support，自己的库起名 mydecode。自动生成的 <code>mydecode.cpp</code> 改为 <code>mydecode.c</code></li>
+<li>MainActivity 里添加 native 方法，让 native 方法跑在单独的线程里不要阻塞UI线程以免引起不必要的麻烦。修改后的MainActivity跟上文一样。  </li>
+<li>
+<p>把 <code>libwebm.a</code>， <code>libvpx.a</code> 和 libvpx 目录下的所有源文件(不包括子目录里的)拷贝到jni目录，并在Android.mk里把他们都加进去<br />
+修改后的 Android.mk 如下：</p>
+<pre><code>LOCAL_PATH := $(call my-dir)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE    := pre-st-libwebm
+LOCAL_SRC_FILES := libwebm.a
+include $(PREBUILT_STATIC_LIBRARY)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE    := pre-st-libvpx
+LOCAL_SRC_FILES := libvpx.a
+include $(PREBUILT_STATIC_LIBRARY)
+
+include $(CLEAR_VARS)
+LOCAL_MODULE    := mydecode
+LOCAL_SRC_FILES := mydecode.c
+LOCAL_SRC_FILES += vpxdec.c
+LOCAL_SRC_FILES += args.c
+LOCAL_SRC_FILES += ivfdec.c
+LOCAL_SRC_FILES += md5_utils.c
+LOCAL_SRC_FILES += rate_hist.c
+LOCAL_SRC_FILES += tools_common.c
+LOCAL_SRC_FILES += video_reader.c
+LOCAL_SRC_FILES += webmdec.cc
+LOCAL_SRC_FILES += y4menc.c
+LOCAL_SRC_FILES += y4minput.c
+#libyuv_src_files := $(wildcard $(LOCAL_PATH)/third_party/libyuv/source/*.cc)
+#libyuv_src_files := $(libyuv_src_files:$(LOCAL_PATH)/%=%)
+#LOCAL_SRC_FILES += $(libyuv_src_files)
+LOCAL_STATIC_LIBRARIES := pre-st-libvpx pre-st-libwebm
+include $(BUILD_SHARED_LIBRARY)
+</code></pre>
+
+</li>
+<li>把以下头文件拷贝到jni目录下。（跟使用 libwebm 是一样的，这就不再写一遍了。）</li>
+<li>
+说明，vpxdec.c 跟 libyuv 有关系，直接 Build Android 项目时会报错。关于 libyuv 有以下两种解决方案：
+<ul>
+<li>
+方案一: 把libyuv的源文件放到Android项目里编译一遍。（就是以上Android.mk注释掉的部分）。比较麻烦，但也实验成功了。需要做以下工作：
+<ul>
+<li>在Android.mk加上libyuv的源文件（即打开Android.mk注释掉的部分）</li>
+<li>把libyuv相关的源码拷贝到jni对应目录下</li>
+<li>
+修改一下libyuv的目录结构，把原来在 include 里的 libyuv 挪到 libyuv/source 里。挪完了之后的目录结构是这样：<br />
+<code>jni/third_party/libyuv/source</code><br />
+source里面是.cc源文件和文件夹libyuv，文件夹libyuv里是头文件。
+</li>
+<li>修改libyuv的所有头文件，把 <code>#include &quot;libyuv/xxx.h&quot;</code> 全部改为 <code>#include &quot;xxx.h&quot;</code></li>
+</ul>
+</li>
+<li>
+方案二：把 CONFIG_LIBYUV 给干掉，有两种方式：
+<ul>
+<li>手动把 <code>vpx_config.h</code> 里面的 <code>CONFIG_LIBYUV</code> 由1改为0。</li>
+<li>或者在编译 libvpx 的时候加上参数 <code>--disable-libyuv</code>，这样生成的 <code>vpx_config.h</code> 里面， <code>CONFIG_LIBYUV</code> 就是 0 了。</li>
+</ul>
+</li>
+<li>说明： 在编译 libvpx 的时候，虽然有一个开关 <code>--eanble-libyuv/--disable-libyuv</code> ，但即便打开了，也不会把 libyuv编进libvpx.a里面。这个开关只影响生成的 <code>vpx_config.h</code> 里面的 <code>CONFIG_LIBYUV</code> 是0 还是1</li>
+</ul>
+</li>
+<li>
+<p>native 方法直接调用 vpxdec.c 里的main函数进行解码： </p>
+<pre><code>#include &lt;jni.h&gt;
+JNIEXPORT jint JNICALL Java_com_zsl_useprebuiltstlibvpx2_MainActivity_mydecode
+  (JNIEnv * env, jobject obj)
+{
+    char* argv[] = {&quot;nothing&quot;,&quot;--i420&quot;,&quot;-o&quot;,&quot;/sdcard/test.yuv&quot;,&quot;/sdcard/test.webm&quot;};
+    int r = main(sizeof(argv)/sizeof(char*), argv);
+    return r;
+}
+</code></pre>
+
+</li>
+<li>
+<p>把解码生成的yuv写到sdcard上，必须在 Manifest 里添加权限：</p>
+<pre><code>&lt;uses-permission android:name=&quot;android.permission.WRITE_EXTERNAL_STORAGE&quot;/&gt;
+&lt;uses-permission android:name=&quot;android.permission.MOUNT_UNMOUNT_FILESYSTEMS&quot;/&gt;
+</code></pre>
+
+</li>
+</ul>
+
+</body>
+</html>
+<!-- This document was created with MarkdownPad, the Markdown editor for Windows (http://markdownpad.com) -->

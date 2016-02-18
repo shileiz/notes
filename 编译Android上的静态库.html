@@ -1,0 +1,376 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>编译Android上的静态库</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<style type="text/css">
+/* GitHub stylesheet for MarkdownPad (http://markdownpad.com) */
+/* Author: Nicolas Hery - http://nicolashery.com */
+/* Version: b13fe65ca28d2e568c6ed5d7f06581183df8f2ff */
+/* Source: https://github.com/nicolahery/markdownpad-github */
+
+/* RESET
+=============================================================================*/
+
+html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address, big, cite, code, del, dfn, em, img, ins, kbd, q, s, samp, small, strike, strong, sub, sup, tt, var, b, u, i, center, dl, dt, dd, ol, ul, li, fieldset, form, label, legend, table, caption, tbody, tfoot, thead, tr, th, td, article, aside, canvas, details, embed, figure, figcaption, footer, header, hgroup, menu, nav, output, ruby, section, summary, time, mark, audio, video {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* BODY
+=============================================================================*/
+
+body {
+  font-family: Helvetica, arial, freesans, clean, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #333;
+  background-color: #fff;
+  padding: 20px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+body>*:first-child {
+  margin-top: 0 !important;
+}
+
+body>*:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* BLOCKS
+=============================================================================*/
+
+p, blockquote, ul, ol, dl, table, pre {
+  margin: 15px 0;
+}
+
+/* HEADERS
+=============================================================================*/
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 20px 0 10px;
+  padding: 0;
+  font-weight: bold;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 tt, h1 code, h2 tt, h2 code, h3 tt, h3 code, h4 tt, h4 code, h5 tt, h5 code, h6 tt, h6 code {
+  font-size: inherit;
+}
+
+h1 {
+  font-size: 28px;
+  color: #000;
+}
+
+h2 {
+  font-size: 24px;
+  border-bottom: 1px solid #ccc;
+  color: #000;
+}
+
+h3 {
+  font-size: 18px;
+}
+
+h4 {
+  font-size: 16px;
+}
+
+h5 {
+  font-size: 14px;
+}
+
+h6 {
+  color: #777;
+  font-size: 14px;
+}
+
+body>h2:first-child, body>h1:first-child, body>h1:first-child+h2, body>h3:first-child, body>h4:first-child, body>h5:first-child, body>h6:first-child {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+a:first-child h1, a:first-child h2, a:first-child h3, a:first-child h4, a:first-child h5, a:first-child h6 {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+h1+p, h2+p, h3+p, h4+p, h5+p, h6+p {
+  margin-top: 10px;
+}
+
+/* LINKS
+=============================================================================*/
+
+a {
+  color: #4183C4;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* LISTS
+=============================================================================*/
+
+ul, ol {
+  padding-left: 30px;
+}
+
+ul li > :first-child, 
+ol li > :first-child, 
+ul li ul:first-of-type, 
+ol li ol:first-of-type, 
+ul li ol:first-of-type, 
+ol li ul:first-of-type {
+  margin-top: 0px;
+}
+
+ul ul, ul ol, ol ol, ol ul {
+  margin-bottom: 0;
+}
+
+dl {
+  padding: 0;
+}
+
+dl dt {
+  font-size: 14px;
+  font-weight: bold;
+  font-style: italic;
+  padding: 0;
+  margin: 15px 0 5px;
+}
+
+dl dt:first-child {
+  padding: 0;
+}
+
+dl dt>:first-child {
+  margin-top: 0px;
+}
+
+dl dt>:last-child {
+  margin-bottom: 0px;
+}
+
+dl dd {
+  margin: 0 0 15px;
+  padding: 0 15px;
+}
+
+dl dd>:first-child {
+  margin-top: 0px;
+}
+
+dl dd>:last-child {
+  margin-bottom: 0px;
+}
+
+/* CODE
+=============================================================================*/
+
+pre, code, tt {
+  font-size: 12px;
+  font-family: Consolas, "Liberation Mono", Courier, monospace;
+}
+
+code, tt {
+  margin: 0 0px;
+  padding: 0px 0px;
+  white-space: nowrap;
+  border: 1px solid #eaeaea;
+  background-color: #f8f8f8;
+  border-radius: 3px;
+}
+
+pre>code {
+  margin: 0;
+  padding: 0;
+  white-space: pre;
+  border: none;
+  background: transparent;
+}
+
+pre {
+  background-color: #f8f8f8;
+  border: 1px solid #ccc;
+  font-size: 13px;
+  line-height: 19px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: 3px;
+}
+
+pre code, pre tt {
+  background-color: transparent;
+  border: none;
+}
+
+kbd {
+    -moz-border-bottom-colors: none;
+    -moz-border-left-colors: none;
+    -moz-border-right-colors: none;
+    -moz-border-top-colors: none;
+    background-color: #DDDDDD;
+    background-image: linear-gradient(#F1F1F1, #DDDDDD);
+    background-repeat: repeat-x;
+    border-color: #DDDDDD #CCCCCC #CCCCCC #DDDDDD;
+    border-image: none;
+    border-radius: 2px 2px 2px 2px;
+    border-style: solid;
+    border-width: 1px;
+    font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+    line-height: 10px;
+    padding: 1px 4px;
+}
+
+/* QUOTES
+=============================================================================*/
+
+blockquote {
+  border-left: 4px solid #DDD;
+  padding: 0 15px;
+  color: #777;
+}
+
+blockquote>:first-child {
+  margin-top: 0px;
+}
+
+blockquote>:last-child {
+  margin-bottom: 0px;
+}
+
+/* HORIZONTAL RULES
+=============================================================================*/
+
+hr {
+  clear: both;
+  margin: 15px 0;
+  height: 0px;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  border-bottom: 4px solid #ddd;
+  padding: 0;
+}
+
+/* TABLES
+=============================================================================*/
+
+table th {
+  font-weight: bold;
+}
+
+table th, table td {
+  border: 1px solid #ccc;
+  padding: 6px 13px;
+}
+
+table tr {
+  border-top: 1px solid #ccc;
+  background-color: #fff;
+}
+
+table tr:nth-child(2n) {
+  background-color: #f8f8f8;
+}
+
+/* IMAGES
+=============================================================================*/
+
+img {
+  max-width: 100%
+}
+</style>
+</head>
+<body>
+<ul>
+<li>总体思路：用NDK编译源码，生成静态库。</li>
+<li>需要用到的库有两个：libwebm、libvpx。我们用NDK编译生成这两个库即可。</li>
+<li>libvpx依赖于libwebm，所以先编libwebm，再编libvpx。</li>
+<li>用NDK编译就需要NDK的makefile，即Android.mk。</li>
+<li>libwebm和libvpx都有自己的Android.mk,直接使用即可。  </li>
+</ul>
+<hr />
+<h3>详细步骤</h3>
+<h5>编译 libwebm：</h5>
+<ul>
+<li>
+新建一个文件夹，用来接收编译生成的文件：
+<ul>
+<li><code>mkdir mylibwebm</code></li>
+<li><code>cd mylibwebm</code></li>
+</ul>
+</li>
+<li>
+用NDK以及libwenbm自带的Android.mk编译libwebm：
+<ul>
+<li><code>NDK_PROJECT_PATH=. ndk-build APP_BUILD_SCRIPT=path/to/libvpx/third_party/libwebm/Android.mk APP_ABI=armeabi-v7a APP_STL=gnustl_static</code> </li>
+</ul>
+</li>
+<li>把生成的libwebm.a拷贝出来: <code>cp obj/local/armeabi-v7a/libwebm.a  ./</code></li>
+</ul>
+<h5>编译libvpx：</h5>
+<ul>
+<li>
+因为libvpx的Android.mk（libvpx/build/make/Android.mk）用了很多相对路径，为了跟那些路径对应上，所以必须在libvpx这个文件夹的同级目录下进行config和编译：
+<ul>
+<li><code>cd same_path_as_libvpx</code></li>
+</ul>
+</li>
+<li>
+<p>libvpx需要先config才能编译，config命令如下： </p>
+<pre><code>./libvpx/configure \
+--target=armv7-android-gcc \
+--disable-runtime-cpu-detect \
+--disable-realtime-only \
+--disable-examples \
+--disable-docs \
+--sdk-path=&lt;NDK_root_path&gt; \
+--libc=&lt;NDK_root_path&gt;/platforms/&lt;android-xx&gt;/arch-arm
+</code></pre>
+
+<ul>
+<li>说明：<code>--disable-runtime-cpu-detect</code> 是为默认打开NEON优化，而不是在运行时去detect。因为libvpx默认是在运行时去检测cpu，如果支持NEON则打开，否则不打开。当我们disable了这种检测时，默认打开NEON优化。</li>
+<li>说明：<code>--disable-realtime-only</code>， 因为在目标平台是Android的时候，默认是开启 realtime-only 的，所以加上这个选项，以关闭 realtime-only。</li>
+<li>说明：<code>--libc=</code> 对于有的ndk版本，有可能config脚本找错libc的路径，所以最好手动指定一下，以免config失败。</li>
+</ul>
+</li>
+<li>
+config之后会生成如下东西：
+<ul>
+<li><code>vpx_config.c/vpx_config.h</code>： 这在以后使用 libvpx 的时候会用到，比如 vpxdec.c 里就用到了。</li>
+<li><code>libs-armv7-android-gcc.mk</code>： 这在用NDK编译libvpx时会用到，因为libvpx/build/make/Android.mk里面include了这个文件。</li>
+</ul>
+</li>
+<li>
+<p>自己写一个Android.mk，内容如下：</p>
+<pre><code>LOCAL_PATH := $(call my-dir)
+include $(CLEAR_VARS)
+include $(LOCAL_PATH)/libvpx/build/make/Android.mk 
+</code></pre>
+
+</li>
+<li>说明：之所以要自己写一个mk，再在其中引用 <code>libvpx/build/make/Android.mk</code> 是因为这是 <code>libvpx/build/make/Android.mk</code> 的注释里写的。</li>
+<li>说明：直接使用 libvpx/build/make/Android.mk 是无法编译的，因为连 LOCAL_PATH 都没定义。它这种用法也是为了方便移植安装。</li>
+<li>
+用NDK编译libvpx：
+<ul>
+<li><code>NDK_PROJECT_PATH=. ndk-build APP_BUILD_SCRIPT=Android.mk APP_ABI=armeabi-v7a APP_STL=gnustl_static</code> </li>
+</ul>
+</li>
+<li>把生成的libvpx.a拷贝出来：<code>cp obj/local/armeabi-v7a/libvpx.a ./</code></li>
+<li>编译成功后还会在当前目录生成5个头文件：<code>vpx_dsp_rtcd.h</code>， <code>vpx_scale_rtcd.h</code>， <code>vp9_rtcd.h</code>， <code>vp8_rtcd.h</code>， <code>vpx_version.h</code></li>
+<li>这5个头文件具体有什么用后续再研究。</li>
+</ul>
+
+</body>
+</html>
+<!-- This document was created with MarkdownPad, the Markdown editor for Windows (http://markdownpad.com) -->
