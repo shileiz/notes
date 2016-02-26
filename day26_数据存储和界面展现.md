@@ -11,7 +11,7 @@
 
 		android:layout_gravity="top"
 
-* 注意：android:gravity 指的是元素内的文本和元素本身的对齐方式，跟layout_gravity不是一回事
+* 注意：`android:gravity` 指的是元素内的文本和元素本身的对齐方式，跟layout_gravity不是一回事
 * 注意：在竖直布局下，顶部对齐（="top"）、底部对齐（="bottom"）、竖直居中（="center_vertical"）不生效。水平布局同理。
 * 权重：按比例分配屏幕的剩余宽度或者高度。例如：
 
@@ -35,6 +35,7 @@
 * 放置于其他组件的上方、下方、左边、右边。例如放置于xx组件的右边：
 
 		android:layout_toRightOf="@id/xx"
+* 注意，元素内的文字相对于元素本身的对其方式，要用 `android:gravity="center"` 这种
 
 ##帧布局
 * 用的比较少，仅用于有些API要求布局中必须有一个FrameLayout的情况
