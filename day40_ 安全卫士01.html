@@ -1,7 +1,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
-<title>day40_ 安全卫士01</title>
+<title>day40_安全卫士01</title>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <style type="text/css">
 /* GitHub stylesheet for MarkdownPad (http://markdownpad.com) */
@@ -335,7 +335,17 @@ android:shadowRadius=&quot;1&quot;    //阴影半径，越大越发散
 </ul>
 </li>
 <li>去掉TitleBar：修改Manifest文件的<code>&lt;application&gt;</code>节点，把主题改成如下的：<br />
-<code>android:theme=&quot;@android:style/Theme.Black.NoTitleBar&quot;</code></li>
+<code>android:theme=&quot;@android:style/Theme.Black.NoTitleBar&quot;</code>  </li>
+<li>但是以上方法是把theme改成了Android2.0的风格（@android:style/Theme.Black.NoTitleBar 是2.0的主题）  </li>
+<li>
+最好的方法是：  
+
+<ul>
+<li>Manifest文件里，<code>&lt;application&gt;</code>的Theme仍然使用初始的 <code>android:theme=&quot;@style/AppTheme&quot;</code></li>
+<li>修改values下的style.xml，</li>
+<li>在<code>&lt;style name=&quot;AppTheme&quot; parent=&quot;AppBaseTheme&quot;&gt;</code>节点添加一个子节点：<code>&lt;item name=&quot;android:windowNoTitle&quot;&gt;true&lt;/item&gt;</code></li>
+</ul>
+</li>
 <li>布局文件中可以直接加 <code>&lt;ProgressBar&gt;</code> 节点</li>
 </ul>
 <h3>关于 versionName 和 versionCode</h3>
@@ -348,6 +358,92 @@ android:shadowRadius=&quot;1&quot;    //阴影半径，越大越发散
 <li>而 PackageInfo 里就包括了 versionCode（int） 和 versionName（String）。
 <code>packageInfo.versionCode; packageInfo.versionName</code></li>
 <li>对于我们自己的程序，可以用 API <code>getPackageName()</code> 来获取自己的 packagename，不用把一长串字符写死。</li>
+<li>安卓系统 Setting 里显示的版本号是 versionName（String）</li>
+</ul>
+<blockquote>
+<p>Eclipse 右键加入打开所在位置的插件<br />
+下载jar包（https://github.com/samsonw/OpenExplorer/downloads），放到plugins目录，重启eclipse即可。 </p>
+</blockquote>
+<h3>把常用color保存成资源xml文件</h3>
+<ul>
+<li>在valuse文件夹下建一个colors.xml</li>
+<li>里面这么写：</li>
+<li>
+<pre><code>&lt;resources&gt;
+    &lt;color name=&quot;black&quot;&gt;#000000&lt;/color&gt;
+    &lt;color name=&quot;green&quot;&gt;#00FF00&lt;/color&gt;
+&lt;/resources&gt;
+</code></pre>
+
+</li>
+<li>需要使用颜色的时候用 <code>@colors/green</code> 这种方式引用</li>
+</ul>
+<h3>跑马灯文字</h3>
+<ul>
+<li>首先，要为TextView配置以下两个属性：</li>
+<li>
+<pre><code>android:singleLine=&quot;true&quot;
+android:ellipsize=&quot;marquee&quot; 
+</code></pre>
+
+</li>
+<li>其次，只有Focus的TextView才能滚动起来，需要配置以下两个属性：</li>
+<li>
+<pre><code>android:focusable=&quot;true&quot;
+android:focusableInTouchMode=&quot;true&quot;
+</code></pre>
+
+</li>
+</ul>
+<h3>GridView</h3>
+<ul>
+<li>
+<p>GridView 类似于 ListView，也是要有 adapter 那一套</p>
+<ul>
+<li>
+<p>把代表元素的 xml inflate 成 View 的方法：</p>
+<ol>
+<li>
+<p>得到 Activity 的 inflater：</p>
+<pre><code>LayoutInflater inflater = (LayoutInflater)ParentActivity.this.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+</code></pre>
+
+</li>
+<li>
+<p>用 inflater 进行 inflate：</p>
+<pre><code>View v = inflater.inflate(R.layout.item_home, parent, false);
+</code></pre>
+
+</li>
+<li>
+<p>简便方法：用 View 的静态方法 View.inflate()</p>
+<pre><code>View.inflate(HomeActivity.this, R.layout.item_home, null)
+</code></pre>
+
+</li>
+</ol>
+</li>
+</ul>
+</li>
+<li>唯一的区别就是它得设置一个 <code>android:numColumns=&quot;3&quot;</code>，表示每一排显示几个元素。</li>
+<li>还可以设置两个Item之间的水平距离，两行之间的垂直距离：</li>
+<li>
+<pre><code>android:horizontalSpacing=&quot;20dp&quot;
+android:verticalSpacing=&quot;20dp&quot;
+</code></pre>
+
+</li>
+</ul>
+<h5>关于 Adapter 的选择</h5>
+<ul>
+<li>一般直接继承 BaseAdapter 写一个自己的 Adapter 就行了，这是最常用的。</li>
+<li>BaseAdapter 是抽象类，它是实现了 ListView 接口的。没人直接去 new 一个 ListAdapter 的，需要实现的方法太多了。</li>
+<li>另外像 ArrayAdapter、SimpleAdapter 都是 BaseAdapter 的子类，用起来更方便，但自由度没有 BaseAdapter 高。</li>
+</ul>
+<h3>关于线性布局的权重</h3>
+<ul>
+<li>在一个线性布局里，系统把不按权重分配空间的东西剩下的地方，按比例分配给那些按权重的东西</li>
+<li>所以，如果一个线性布局里只有一个元素是按权重占用空间的，那么它将占用除了其他元素之外的所有空间</li>
 </ul>
 
 </body>

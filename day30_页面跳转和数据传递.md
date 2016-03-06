@@ -70,3 +70,6 @@
 * 隐式意图用于启动不同应用中的Activity
 	* 如果系统中存在多个Activity的intent-filter同时与你的intent匹配，那么系统会显示一个对话框，列出所有匹配的Activity，由用户选择启动哪一个
 	
+#Activity的生命周期
+* 要背下来那个图
+* 按返回键的时候，Activity 会被销毁，会走到 onPause --> onStop() --> onDestroy()
