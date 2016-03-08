@@ -291,6 +291,59 @@ img {
 </style>
 </head>
 <body>
+<h2>日常记录</h2>
+<h3>ImageView做按钮</h3>
+<ul>
+<li>要加属性：</li>
+<li>
+<pre><code>android:clickable=&quot;true&quot;
+</code></pre>
+
+</li>
+<li>不要加属性：</li>
+<li>
+<pre><code>android:focusable=&quot;true&quot;
+android:focusableInTouchMode=&quot;true&quot;
+</code></pre>
+
+</li>
+<li>不然会导致第一下点击获得焦点，第二下点击才触发onClick事件</li>
+<li>让图片周围留出空白，但不缩小图片的点击范围，即不能用margin：</li>
+<li>
+<pre><code>android:layout_width=&quot;60dp&quot;
+android:layout_height=&quot;45dp&quot;
+android:scaleType=&quot;centerInside&quot;
+</code></pre>
+
+</li>
+<li>
+添加点击视觉效果：
+<ul>
+<li>把 ImageView 的 android:background 属性设置成一个 selector</li>
+<li>这个 selector 在 press 的情况下为一个 shape，其他情况下为 透明：</li>
+<li>
+<pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+&lt;selector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;&gt;
+    &lt;item android:drawable=&quot;@drawable/shape_btn_pressd_background&quot; android:state_pressed=&quot;true&quot;/&gt;
+    &lt;item android:drawable=&quot;@android:color/transparent&quot; /&gt;
+&lt;/selector&gt;
+</code></pre>
+
+</li>
+<li>其中shape也可以用一张自定义的图片代替，但个人觉得shape比较好。上面的selector用到的shape：</li>
+<li>
+<pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+&lt;shape 
+    xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;
+    android:shape=&quot;rectangle&quot; &gt;
+    &lt;solid android:color=&quot;@color/grey&quot; /&gt;
+&lt;/shape&gt;
+</code></pre>
+
+</li>
+</ul>
+</li>
+</ul>
 <h2>Player开发相关</h2>
 <h3>关于Player开发中各种互相阻塞的问题</h3>
 <ul>

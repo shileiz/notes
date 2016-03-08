@@ -1,3 +1,37 @@
+##日常记录
+###ImageView做按钮
+* 要加属性：
+* 
+		android:clickable="true"
+* 不要加属性：
+*                  
+		android:focusable="true"
+        android:focusableInTouchMode="true"
+* 不然会导致第一下点击获得焦点，第二下点击才触发onClick事件
+* 让图片周围留出空白，但不缩小图片的点击范围，即不能用margin：
+*             
+        android:layout_width="60dp"
+        android:layout_height="45dp"
+        android:scaleType="centerInside"
+* 添加点击视觉效果：
+	* 把 ImageView 的 android:background 属性设置成一个 selector
+	* 这个 selector 在 press 的情况下为一个 shape，其他情况下为 透明：
+	* 
+			<?xml version="1.0" encoding="utf-8"?>
+			<selector xmlns:android="http://schemas.android.com/apk/res/android">
+			    <item android:drawable="@drawable/shape_btn_pressd_background" android:state_pressed="true"/>
+			    <item android:drawable="@android:color/transparent" />
+			</selector>
+	* 其中shape也可以用一张自定义的图片代替，但个人觉得shape比较好。上面的selector用到的shape：
+	* 
+			<?xml version="1.0" encoding="utf-8"?>
+			<shape 
+				xmlns:android="http://schemas.android.com/apk/res/android"
+			    android:shape="rectangle" >
+			    <solid android:color="@color/grey" />
+			</shape>
+
+
 ##Player开发相关
 ###关于Player开发中各种互相阻塞的问题
 * 从 Activity 的 onCreate() 退出之前，SurfaceView 是不会被创建的。
