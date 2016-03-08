@@ -30,6 +30,112 @@
 			    android:shape="rectangle" >
 			    <solid android:color="@color/grey" />
 			</shape>
+### 关于 Adapter (前面拷贝自 day40)
+* 一般直接继承 BaseAdapter 写一个自己的 Adapter 就行了，这是最常用的。
+* BaseAdapter 是抽象类，它是实现了 ListView 接口的。没人直接去 new 一个 ListAdapter 的，需要实现的方法太多了。
+* 另外像 ArrayAdapter、SimpleAdapter 都是 BaseAdapter 的子类，用起来更方便，但自由度没有 BaseAdapter 高。
+* 当Adapter的数据改变的时候，只要调用它的 notifyDataSetChanged() 方法就行了
+* 这时 Android 系统就知道这个 Adapter 的数据变了，就会重新去重新调用 getView() 了
+* 不过，由于我们继承 BaseAdapter，它的数据源是我们手动指定的，所以我们应该给它添加一个能更新数据源的方法，比如叫 updateSource(new_data)
+* 我们每次通知系统数据源变了之前，先手动更新我们的数据源
+* 就是，在调 notifyDataSetChanged() 之前，先调一下 updateSource(new_data)
+* 以下为例子：
+* 
+		package com.zsl.listadapter;
+		
+		import java.util.ArrayList;
+		
+		import android.app.Activity;
+		import android.content.Context;
+		import android.os.Bundle;
+		import android.util.Log;
+		import android.view.View;
+		import android.view.ViewGroup;
+		import android.widget.BaseAdapter;
+		import android.widget.Button;
+		import android.widget.ListView;
+		import android.widget.TextView;
+		
+		public class MainActivity extends Activity {
+		   
+			private ListView lv_list;
+			private MyAdapter myadapter;
+			private Button btn_update;
+		   
+			class MyAdapter extends BaseAdapter{
+				
+				private Context  context;
+				private ArrayList<String> mydata;
+				private static final String TAG = "shilei";
+				
+				public MyAdapter(Context ctx, ArrayList<String> data){
+					Log.d(TAG, "create MyAdapter");
+					this.context = ctx;
+					this.mydata = data;
+				}
+				
+				@Override
+				public int getCount() {
+					Log.d(TAG, "getCount(), source length: "+ mydata.size());
+					return mydata.size();
+				}
+		
+				@Override
+				public Object getItem(int position) {
+					return mydata.get(position);
+				}
+		
+				@Override
+				public long getItemId(int position) {
+					return position;
+				}
+		
+				@Override
+				public View getView(int position, View convertView, ViewGroup parent) {
+					Log.d(TAG, "getView(), position: "+position);
+					if(convertView == null){
+						convertView = View.inflate(context, android.R.layout.simple_list_item_1, null);
+					}
+					TextView text1 = (TextView) convertView.findViewById(android.R.id.text1);
+					text1.setText(mydata.get(position));
+					return convertView;
+				}
+				
+				public void updateSource(ArrayList<String> data){
+					this.mydata = data;
+				}
+				
+			}
+			
+			@Override
+		    public void onCreate(Bundle savedInstanceState) {
+		        super.onCreate(savedInstanceState);
+		        setContentView(R.layout.activity_main);
+		        
+		        lv_list = (ListView) findViewById(R.id.list);
+		        ArrayList<String> data = new ArrayList<String>();
+		        for (int i = 0; i < 5; i++) {
+		        	data.add(new String("" + (i + 1)));
+		        }
+		        
+		        myadapter = new MyAdapter(this, data);
+		        lv_list.setAdapter(myadapter);
+		        
+		        btn_update = (Button) findViewById(R.id.update);
+		        btn_update.setOnClickListener(new View.OnClickListener() {
+					@Override
+					public void onClick(View v) {
+						ArrayList<String> data = new ArrayList<String>();
+				        for (int i = 5; i < 100; i++) {
+				        	data.add(new String("" + (i + 6)));
+				        }
+				        myadapter.updateSource(data);
+						myadapter.notifyDataSetChanged();
+					}
+				});
+		        
+		    }
+		}
 
 
 ##Player开发相关
