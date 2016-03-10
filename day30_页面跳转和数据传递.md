@@ -73,3 +73,9 @@
 #Activity的生命周期
 * 要背下来那个图
 * 按返回键的时候，Activity 会被销毁，会走到 onPause --> onStop() --> onDestroy()
+
+#Activity的四种启动模式
+* singleInstance 模式和 singeTask 的区别：
+* singeTask 是在当前 Activity 所在的 app 的任务栈里只有一个实例；singleInstance 是在整个内存的任务栈里只有一个实例。
+* 所以启动 singleInstance 模式的 Activity 或者从它返回什么的，会引起前后台任务栈的切换。
+* 同一个 app 里，也会为 singleInstance 的 Activity 单独开一个任务栈，在 app 内部来回切 Activity 时也会引起任务栈的切换。
