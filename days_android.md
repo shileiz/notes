@@ -137,6 +137,19 @@
 		    }
 		}
 
+### ListView Adapter的 getCount()、getView()不停的被调用
+* 网上说是　ListView 的宽高设置成 match_parent 或者固定值就好了
+* 试了一下还是不行
+* 最后发现原因是我把 ListView 所在的 ViewGroup（是个自定义 View）放在了某个 LinearLayout 的下面造成的：
+* `android:layout_below="@id/ll_top_control" `
+* 无论那个 LinearLayout 的高是 wrap_content 还是固定大小，都不行
+* 没有深入研究下去
+
+### Activity的 addContentView(View view, LayoutParams params)
+* Android 里所有 Activity 的根布局都是一个 FrameLayout
+* 你用 setContentView() 给你的 Activity 加的布局文件，是这个 FrameLayout 的子节点
+* addContentView(View view, LayoutParams params) 也是把 view 添加给这个 frameLayout 的
+
 
 ##Player开发相关
 ###关于Player开发中各种互相阻塞的问题
