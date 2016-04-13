@@ -325,7 +325,19 @@ img {
 </ul>
 <h5>在清单文件中配置广播接收者</h5>
 <ul>
-<li>需要在清单文件中配置（四大组建都需要）</li>
+<li>
+需要在清单文件中配置（四大组建都需要）
+<ul>
+<li>广播接收者比较特殊，既可以在清单文件中注册，也可以直接使用代码注册 （day32会讲）</li>
+<li>
+有的广播接收者，必须代码注册
+<ul>
+<li>电量改变</li>
+<li>屏幕锁屏和解锁</li>
+</ul>
+</li>
+</ul>
+</li>
 <li>广播接收者是跟 activity 同级的，在 application 节点下，叫做 <code>&lt;receiver android:name=&quot;com.xxx.xxx.xxxReceiver&quot;&gt;</code></li>
 <li>广播接收者必须添加 <code>&lt;intent-filter &gt;</code> 子节点，来告诉安卓系统你这个接收者是接收什么广播的</li>
 <li><code>&lt;intent-filter &gt;</code> 子节点必须添加 <code>&lt;action&gt;</code> 子节点来过滤广播的类型</li>
