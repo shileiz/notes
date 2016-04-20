@@ -1,6 +1,42 @@
+## 常用参数
+
+### `-s seed`
+* seed 是个数，最为随机生成动作序列的种子。比如500，1000，都可以。
+* 相同 seed 产生的动作序列是一样的。如果想每次跑 Monkey 都产生同样事件序列，则每次的 -s 参数都设成一样即可。
+
+### `-p package`
+* 允许被打开的 app
+* 比如 `adb shell monkey -p com.android.gallery3d`
+* 如果要同时跑多个 app，要用多个 `-p`
+* 比如 `adb shell monkey -p com.android.gallery3d -p com.android.music`
+* 当然写太多了也烦，可以用 `--pkg-blacklist-file` 或者 `--pkg-whitelist-file` 代替，后面会讲。
+
+### `--ignore-crashes --ignore-timeouts --monitor-native-crashes`
+* 这三个参数一般都用上，`--ignore-crashes` 和 `--ignore-timeouts` 防止因为 crash 和 timeout（比如 ANR） 导致monkey停下来；`--monitor-native-crashes` 用来记录底层库的 crash。
+
+### `-v -v -v `
+* 把 Monkey 的 log 级别设置到最详细级别
+* 注意要连着写3个 `-v`
+
 ###  `--throttle <milliseconds>`
 * 在随机事件之间插入固定时间间隔。注意： 不加这个参数**默认是无间隔**，即尽可能快的发送随机事件。
 * If not specified, there is no delay and the events are generated as rapidly as possible.
+* 一般可以把这个参数设置成 1000，即每隔1秒产生下一个动作
+* 根据经验，如果不设间隔，即让它尽可能快的跑，平均每秒钟能产生60~70个随机事件（基于双核64bit的Nexus9，针对图库app）
+
+
+## 不太常用参数 
+
+### `--pkg-blacklist-file PACKAGE_BLACKLIST_FILE`
+* 参数 PACKAGE_BLACKLIST_FILE 是个文本文件，里面写上 package 的名字，一个 package 占一行即可，比如：
+
+		com.android.nfc
+		com.android.wallpapercropper
+		com.android.galaxy4
+		com.tencent.research.drop
+* 然后把这个文件起名叫 blacklist.txt，并 push 到手机的 /data
+* 运行 `adb shell monkey --pkg-blacklist-file /data/blacklist.txt` 即可
+* `--pkg-whitelist-file` 跟这个参数一样，见名知意不再赘述。
 
 ### `--pct-xxxxx <percent>`
 * 官方文档里只给出8中事件的百分比设置：
