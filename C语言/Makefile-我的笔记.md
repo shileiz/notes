@@ -12,6 +12,7 @@
 
 		echo "hello"
 		hello
+
 ## 阶段一
 * all是目标，为了达到目标all，需要 add.c sub.c dive.c mul.c main.c 这些条件
 * gcc是命令，命令执行完目标all就达到了
@@ -53,7 +54,7 @@
 * 该makefile就有两棵关系树，执行的时候需要用 make clean 来执行 clean
 * 不加参数只会执行第一棵关系树，上例中即app
 * 或者可以 make add.o 来只执行 add.o 这个目标
-	
+
 ## .PHONY
 * 当执行 make xxx 时，如果当前目录中恰巧有一个文件叫 xxx，而xxx这个目标又是没有依赖的话，那么make会提示 make: `xxx' is up to date.
 * 解决方案是，在makefile里加一行：`.PHONY:xxx`
