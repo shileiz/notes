@@ -41,7 +41,7 @@
 * 运行make时，make会先对比目标和依赖的修改时间，如果依赖比目标新，则说明需要重新生成目标，否则说明不需要重新生成目标。
 * make只会执行那些需要更新的目标的命令
 * 如果目标不依赖任何条件，则会执行命令
-
+	
 ## make 命令的语法：
 * `make 目标`
 * 比如上例： `make app`
@@ -53,11 +53,13 @@
 * 该makefile就有两棵关系树，执行的时候需要用 make clean 来执行 clean
 * 不加参数只会执行第一棵关系树，上例中即app
 * 或者可以 make add.o 来只执行 add.o 这个目标
-## 关于.PHONY
+	
+## .PHONY
 * 当执行 make xxx 时，如果当前目录中恰巧有一个文件叫 xxx，而xxx这个目标又是没有依赖的话，那么make会提示 make: `xxx' is up to date.
 * 解决方案是，在makefile里加一行：`.PHONY:xxx`
 * 注意 .PHONY 是关键字，换成别的是不好使的。
-## 关于 - 和 @
+	
+## - 和 @
 * 命令前面加上 - 表示该命令即使执行失败了，make也会继续运行
 * 命令前面加上 @ 表示不显示命令本身，只显示命令的结果
 * 这俩符号可以连着用，例如
@@ -65,7 +67,7 @@
 		just:
 		    @-rm nobody.txt
 		    @echo "just do it!"
-
+	
 ## 阶段三（变量/内置变量和规则）
 * makefile里可以定义变量(变量名=值)，然后用$(变量名)来引用变量。例如：
 
@@ -95,6 +97,7 @@
 
 		%.o:%.c
 			gcc -c $< -o $@
+	
 ## makefile 的函数
 * makefile有自己的函数
 * 调用函数的语法是：`$(function arguments)` 或者 `${function arguments}`
@@ -102,18 +105,21 @@
 * 函数的参数可以引用变量
 * 函数调用的语法跟引用变量非常的像，都是$()这种形式。
 * 函数的返回值可以直接用来给变量赋值。  
+	
 ### wildcard 函数
 * 语法：`$(wildcard PATTERN)`
 * 功能：列出当前目录下所有符合模式“PATTERN”的文件名。
 * 返回：空格分割的、存在当前目录下的所有符合模式“PATTERN”的文件名。
 * 说明：“PATTERN”使用shell可识别的通配符，包括“?”（单字符）、“*”（多字符）等。
 * 示例：`$(wildcard *.c)` 返回值为当前目录下所有.c源文件列表。  
+	
 ### patsubst 函数
 * 语法：`$(patsubst pattern,replacement,text)`
 * 功能：查找 text 中的单词（单词以“空格”、“Tab”或“回车”“换行”分隔）是否符合模式 pattern，如果匹配的话，则以 replacement 替换。
 * 返回：被替换过后的字符串。
 * 说明：pattern 可以包括通配符 “%”，表示任意长度的字串。如果 replacement 中也包含“%”，那么，replacement 中的这个 “%” 将是 pattern 中的那个“%”所代表的字串。（可以用“\”来转义，以“\%”来表示真实含义的“%”字符）
 * 示例：`$(patsubst %.c,%.o,x.c.c bar.c)` 返回字符串 `x.c.o bar.o`
+	
 ###了解了这些，我们阶段三的Makefile是如下这样的：
 
 		src = $(wildcard *.c)
