@@ -11,8 +11,9 @@
 * 比如 `adb shell monkey -p com.android.gallery3d -p com.android.music`
 * 当然写太多了也烦，可以用 `--pkg-blacklist-file` 或者 `--pkg-whitelist-file` 代替，后面会讲。
 
-### `--ignore-crashes --ignore-timeouts --monitor-native-crashes`
-* 这三个参数一般都用上，`--ignore-crashes` 和 `--ignore-timeouts` 防止因为 crash 和 timeout（比如 ANR） 导致monkey停下来；`--monitor-native-crashes` 用来记录底层库的 crash。
+### `--ignore-crashes --ignore-timeouts --ignore-security-exceptions --ignore-native-crashes --monitor-native-crashes`
+* 这5个参数一般都用上，防止因为 crash 和 timeout（比如 ANR） 导致monkey停下来；
+* `--monitor-native-crashes` 用来记录底层库的 crash。
 
 ### `-v -v -v `
 * 把 Monkey 的 log 级别设置到最详细级别
