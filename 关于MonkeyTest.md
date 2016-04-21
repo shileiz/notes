@@ -26,6 +26,15 @@
 * 根据经验，如果不设间隔，即让它尽可能快的跑，平均每秒钟能产生60~70个随机事件（基于双核64bit的Nexus9，针对图库app）
 
 
+## Monkey Log  分析
+* 一般用3个 -v 来输出日志
+* 在日志里搜 ANR、NOT RESPONS、CRASH 可以确定是否有 ANR 和 CRASH 发生
+* 在日志里搜 system uptime 可以确定时间：
+	* 可以粗略的视第一个出现 system uptime 的地方为开始跑 Monkey 的时间
+	* 然后在发生 ANR 或 CRASH 的紧挨着的上面一条为发生错误的时间
+	* 两个时间差就是错误大概在开跑多久之后出现的
+	* 注意这个时间是毫秒，除以3600才是小时 
+
 ## 不太常用参数 
 
 ### `--pkg-blacklist-file PACKAGE_BLACKLIST_FILE`
