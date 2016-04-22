@@ -29,11 +29,31 @@
 ## Monkey Log  分析
 * 一般用3个 -v 来输出日志
 * 在日志里搜 ANR、NOT RESPONS、CRASH 可以确定是否有 ANR 和 CRASH 发生
-* 在日志里搜 system uptime 可以确定时间：
+* 在日志里搜 system_uptime 可以确定时间：
 	* 可以粗略的视第一个出现 system uptime 的地方为开始跑 Monkey 的时间
 	* 然后在发生 ANR 或 CRASH 的紧挨着的上面一条为发生错误的时间
-	* 两个时间差就是错误大概在开跑多久之后出现的
-	* 注意这个时间是毫秒，除以3600才是小时 
+	* 两个时间差就是错误大概在开跑多久之后出现的，然后可以根据这个时间去logcat的输出中找到更详细的log（logcat 记得加上参数 `-v threadtime`）。
+	* 注意这个时间是毫秒
+* 例子：
+
+		SET MONKEY_OUTPUT=monkey.log
+		SET REPORT_NAME=MonkeyScreenLog
+		
+		 "会在本批处理文件目录下生成6个报告："
+		echo "Error_List_%REPORT_NAME%.txt 为两种应用层错误（Crash和ANR）按发生时间排列的列表。"
+		echo "Error_Crash_%REPORT_NAME%.txt 为Crash错误的列表和错误原因。"
+		echo "Error_NotRes_%REPORT_NAME%.txt 为Not Responding错误的列表和错误原因。"
+		echo "Error_Details_%REPORT_NAME%.txt 为两种错误按发生时间排列的总的错误列表和原因。"
+		echo "时间戳_%REPORT_NAME%.txt 为发生错误的时间戳（毫秒数）。
+		echo "实际执行次数_%REPORT_NAME%.txt 为实际执行了多少次随机事件。
+		
+		findstr /n /c:"CRASH:" /c:"NOT RESPONDING"  %MONKEY_OUTPUT% > Error_List_%REPORT_NAME%.txt
+		findstr /n /c:"CRASH:" /c:"Short Msg:" /c:"Long Msg:" %MONKEY_OUTPUT% > Error_Crash_%REPORT_NAME%.txt
+		findstr /n /c:"NOT RESPONDING" /c:"ANR " /c:"Reason:" %MONKEY_OUTPUT% > Error_NotRes_%REPORT_NAME%.txt
+		findstr /n /c:"CRASH:" /c:"Short Msg:" /c:"Long Msg:" /c:"NOT RESPONDING" /c:"ANR " /c:"Reason:" %MONKEY_OUTPUT% > Error_Details_%REPORT_NAME%.txt
+		findstr /n /c:"system_uptime" /c:"crash" /c:"CRASH:" /c:"echoNOT RESPONDING"  %MONKEY_OUTPUT% >时间戳_%REPORT_NAME%.txt
+		findstr /n /c:":Sending Trackball"  %MONKEY_OUTPUT% >实际执行次数_%REPORT_NAME%.txt
+
 
 ## 不太常用参数 
 
