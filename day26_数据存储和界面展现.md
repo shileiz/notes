@@ -101,6 +101,7 @@
 * 安卓自动为每个app（一个app即一个用户）创建的目录，该目录对所有用户都有x权限（rwxr-x--x）
 * 安卓里的文件是手动用API创建的，也就说文件的权限是程序员设置的，但内部路径的权限是安卓系统设定的。
 * 由于路径对任何人都有x权限，所以只要文件有rw权限，其他人就可以读写。
+
 >复制一个 Android 工程：  
 需要改package name： Manifest 文件的 <manifest> 节点的 package 属性。  
 修改package name之后java文件会报错，这是因为类 R 需要重新import一下。import 新包名.R    
