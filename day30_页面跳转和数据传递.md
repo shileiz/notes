@@ -17,6 +17,7 @@
 * Activity的跳转需要创建Intent对象，通过设置intent对象的参数指定要跳转Activity
 * 通过设置Activity的包名和类名实现跳转，称为显式意图
 * 通过指定动作实现跳转，称为隐式意图
+
 ###显式意图：可以启动本应用的Activity和其他应用的Activity
 * 显式意图启动本应用的另一个Activity，直接指定该Activity的字节码即可
 

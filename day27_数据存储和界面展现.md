@@ -20,6 +20,7 @@ R 的作用仅仅是把字符串翻译成int而已
 * 因为最终调用的都是某个 View 的 findViewById()，所以是不会冲突的
 * 我们在 ListView 里，使用的是 View.findViewById()。因为我们要做 ListView 的 Adapter 中，把一个 layout xml inflate成一个View，然后在这个View上去按id找东西，所以我们会对 inflate 出来的 View 调用 View.findViewById()。
 * 实际上可以理解为，Activity 就是把setContentView()的那个 xml 给 inflate 成了一个 View，然后调用 Activity.findViewById()时，实际上就是调用这个 View 的 View.findViewById()。
+
 ## 关于AlertDialog
 * 一般使用流程：  
 	  
