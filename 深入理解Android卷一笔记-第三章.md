@@ -5,6 +5,7 @@
 * 我们将要学习：
 	* init 是如何创建 zygote 的
 	* init 的属性服务是如何工作的
+
 ### 第一遍阅读
 * init 会解析两个配置文件："/init.rc" 和 "/init.硬件名.rc"
 * 解析配置文件后，会得到一系列的 Action，Action 是分阶段的。分4个阶段：early-init，init，early-boot，boot。init 会执行这些 Action。
@@ -40,3 +41,8 @@
 	* zygote 就是这么被搞出来的
 	* 详细的流程没有细看
 * 本章关于重启zygote的部分略过了没看 
+
+### 属性服务
+* 属性服务类似于 Windows 的注册表，是 Android 提供给应用程序（和系统本身）存储 key/value 对的东西
+* 这一节主要讲了属性服务的服务端是怎么实现的：包括共享内存、启动过程等，没有细看
+* 然后说了一下客户端通过 `property_set` 函数发送请求可以设置属性，也没具体举例子。

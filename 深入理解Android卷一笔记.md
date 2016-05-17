@@ -5,11 +5,13 @@
 	* 最下是Native层，C语言编写，以.so形式存在
 * 举例
 	* Java（MediaScanner） ---> JIN（libmedia_jin.so） ---> Native（libmedia.so） 
+
 ### JNI 层的函数名，不一定非得叫 `Java_包名_类名_函数名`	
 * 如果JNI层的函数按照以上规则命名了，那么Java层直接能找到对应的函数
 * 如果不按这种规则命名，也有方法，就是动态注册
 * 动态注册除了有缩短函数名，不借助javah工具这两个好处
 * 还有提升效率的好处。因为非动态注册的函数，在初次被Java层调用时，要去so库里按名字搜索，这样影响效率。
+
 ### 动态注册
 * 在JNI层的C代码里，调用函数 `(*env)->RegisterNatives(env,clazz,gMethods,numMethods)` 即可注册
 * 其中 gMethods 是一个数组，数组里放的都是 JNINativeMethod 类型的变量
