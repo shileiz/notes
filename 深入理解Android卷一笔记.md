@@ -6,6 +6,10 @@
 * 举例
 	* Java（MediaScanner） ---> JIN（libmedia_jin.so） ---> Native（libmedia.so） 
 
+* jni 层和 Native 层虽然都是 C/C++ 写的，但还是有区别的：
+	* Native 层完全不知道有 Java 层的存在，是完完全全的C/C++语言写程序。
+	* JNI 层的C/C++函数的第一个参数都是 JNIEnv* env，函数可以通过这个参数跟Java层交互。
+
 ### JNI 层的函数名，不一定非得叫 `Java_包名_类名_函数名`	
 * 如果JNI层的函数按照以上规则命名了，那么Java层直接能找到对应的函数
 * 如果不按这种规则命名，也有方法，就是动态注册
@@ -13,10 +17,19 @@
 * 还有提升效率的好处。因为非动态注册的函数，在初次被Java层调用时，要去so库里按名字搜索，这样影响效率。
 
 ### 动态注册
+
+#### 动态注册的原理
+* 动态注册是C/C++世界告诉某个Java虚拟机：我的这个函数，是给这个Java类用的，它对应该类的这个 native 方法。
+* 注意： C/C++ 是把这种对应关系告诉了虚拟机，而不是告诉某个Java类，即不是告诉了Java程序员。跟静态注册一样，只有虚拟机需要关心java层的方法和jni层的函数之间的对应关系，而不是Java程序员需要关心。
+* 注意：C/C++ 里的一个函数，对应的是Java里的某个**类的**某个**方法**。Java里必须有类。
+* 因为动态注册的过程，是C/C++跟虚拟机对话的过程，所以C/C++必须先拿到那个虚拟机才能进行注册。在C/C++世界，Java虚拟机的代表就是这两个结构体变量：JavaVM、JNIEnv。
+
+--- 
+
 * 在JNI层的C代码里，调用函数 `(*env)->RegisterNatives(env,clazz,gMethods,numMethods)` 即可注册
 * 其中 gMethods 是一个数组，数组里放的都是 JNINativeMethod 类型的变量
 * JNINativeMethod 这个结构体如下：
-* 
+ 
 		typedef struct{
 			//Java 中native函数名，不用包含路径，比如processFile
 			const char* name;
@@ -24,7 +37,7 @@
 			const char* signature;
 			//JNI 层对应的函数的指针
 			void* fnPtr;
-		}JNINativeMethod
+		}JNINativeMethod;
 * 这个结构体就是把Java层的函数名和JNI层的函数指针对应起来的
 * 所以，把实现了的Java层的函数的指针和Java层函数名对应写好，封装到这个结构体里
 * 再把所有这样的结构体放到数组gMethods里
@@ -34,9 +47,10 @@
 * 注册过的函数就有了对应关系了，当Java层调用native函数时，直接就能找到JNI层的对应的函数指针了
 * JNINativeMethod 这个结构体里之所以需要一个函数签名信息，是因为Java支持函数重载
 * 只有把参数返回值都确定了，才能找到对应的到底是哪个Java层函数
+
 ### 动态注册的一般流程
 * 先把实现了Java层native函数的那些函数的指针都封装到JNINativeMethod数组里
-* 
+ 
 		static JNINativeMethod gMethods[]={
 			{
 				"processFile",
@@ -56,7 +70,9 @@
 * 一般把动态注册写在 `JNI_OnLoad(JavaVM* vm, void* reserved) `里
 	* 这个函数会在Java层loadLibrary后被调用
 	* `libmedia_jni.so`的`JNI_OnLoad`函数是在`android_media_MediaPlayer.cpp`里实现的
+
 ### 在JNI层操作Java层的东西 
+
 #### 调用Java层的方法
 1. 通过 `jclass clazz = env->FindClass("含有路径的类名");` 找到类
 2. 通过 `jmethodID mid = env->GetMethodID(clazz,"方法名","方法签名信息");`找到Java层方法的ID
@@ -67,10 +83,12 @@
 	* 第一个参数是指调用哪个对象的方法，就是Java中`.`前面的那个对象 
 	* 第二个参数Java中的MethodID
 	* 后面的参数就是Java方法的参数了，其类型都要是java中能处理的类型，比如jstring，jint，jobject
+
 #### get和setJava层的field
 1. 通过 `jclass clazz = env->FindClass("含有路径的类名");` 找到类
 2. 通过 `jfieldID fid = env->GetFieldID(clazz,"成员名","成员签名信息");`找到Java层成员变量的ID
 3. 通过 `GetxxxField(env,obj,fid);` / `SetxxxField(env,obj,fid,value);` 来get/set相应的成员变量
+
 ### JNI层的jstring要手动释放，这和jstring内部实现有关
 * 用 `char *cString = env->GetStringUTFChars(jstring javaString, NULL)` 能从jstring类型得到C语言的字符串（char*）
 * 用 `jstring javaString = env->NewStringUTF(const char* cString)` 能从C语言的字符串得到jstring的类型

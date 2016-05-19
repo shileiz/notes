@@ -11,6 +11,7 @@
 * 注意，一定要用 Add Natibe Support 的项目才会在右键项目属性中出现 C/C++ 选项
 * 右键项目属性--->C/C++ General ---> Path and Symbols，可以把ndk/platforms/android-xx/arch-arm/usr/inlude添加到Includes里面，这样就可以ctrl跳转到jni.h了
 * 注意，Eclipse关联了NDK之后，仍然无法自动调用javah命令来生成头文件，还是要自己手动执行
+
 ##Eclipse没有NDK配置项的问题
 * 问题现象：  
   - Window--->Preference--->Android下面没有NDK选项
