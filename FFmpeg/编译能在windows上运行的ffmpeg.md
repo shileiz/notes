@@ -3,12 +3,12 @@
 
 ### 参考文档
 
-* http://ffmpeg.org/platform.html#Windows
+* [http://ffmpeg.org/platform.html#Windows](http://ffmpeg.org/platform.html#Windows)
 
 ### 方式一：在 Windows 上使用 MinGW-w64 编译 ffmpeg （本地编译）
 * 环境信息
 * windows10 64bit
-* msys2 x86-64版，于 2016.05.26 下载于http://msys2.github.io/
+* msys2 x86-64版，于 2016.05.26 下载于 http://msys2.github.io/
 * ffmpeg 源码: 用 msys2 的 git 从官方 github 克隆，选择的 branch 是 2.8/release
 
 #### MSYS2 和 MinGW-w64
@@ -21,9 +21,7 @@
 
 #### 安装 MSYS2 和 MinGW-w64
 * 先装 MSYS2,通过 MSYS2 的 pacman 来安装 MinGW-w64
-* MSYS2 在这里下载：
-
-		http://msys2.github.io/
+* MSYS2 在这里下载： [http://msys2.github.io/](http://msys2.github.io/)
 * 下载安装后，在安装目录下运行 mingw64_shell.bat 启动 MSYS2 的窗口
 * 注意，其实以下这几步在 `msys2_shell.bat`（或者msys2.exe）里完成也一样，因为都是在用 pacman 装软件。
 * 不过因为编译 ffmpeg 必须在64位的shell里完成（因为我们是编译给64位windows使用的ffmpeg），所以后面的编译相关的命令，要在 `mingw64_shell.bat`（或者 msys264.exe）打开的窗口里完成。
@@ -31,13 +29,15 @@
 * 在窗口里用 pacman 命令安装 MinGW-w64：
 
 		pacman -S mingw-w64-x86_64-gcc
+
 * 安装 make，pkgconfig，yasm 和 diffutils
 
 		pacman -S make pkgconfig diffutils yasm
 
-* （如果需要通过 MSYS2 下载 ffmpeg 源码）安装 git
+* （如果需要通过 MSYS2 下载 ffmpeg 源码）安装 git  
 
 		pacman -S git
+
 * （如果需要） 用 git 从 ffmpeg 的官方克隆一份源码，本例使用的是 2016年5月26号的 2.8/release branch
 
 #### 编译 ffmpeg
@@ -47,6 +47,7 @@
 * 在 MSYS2 里，cd 到 ffmpeg 的源码目录，然后运行 configure：
 
 		./configure --target-os=mingw32
+
 * 注意，在 msys2 的环境下（安装了 mingw-w64 的），gcc 就是 mingw-w64。所以这不是交叉编译，所以不用在 config 的时候加上 --target-os、--cross-prefix、--arch 参数
 
 ##### make
@@ -75,6 +76,7 @@
 * 直接用 apt-get 进行安装：
 
 		sudo apt-get install mingw-w64
+
 * 注意，不要傻了吧唧在 Ubuntu 的图形化管理界面里，把软件更新相关的功能都关闭，这会导致 apt-get install 出错。
 * 因为这时候一旦查到依赖关系需要升级某个软件时，相当于你禁止它去升级。
 
@@ -84,6 +86,7 @@
 * 必须的三个参数如下
 
 		./configure --target-os=mingw32 --cross-prefix=x86_64-w64-mingw32- --arch=x86_64
+
 * config 时报的 warning：`x86_64-w64-mingw32-pkg-config` 找不到，做个软连接就可以了：
 
 		sudo ln -s "/usr/bin/pkg-config" /usr/bin/x86_64-w64-mingw32-pkg-config

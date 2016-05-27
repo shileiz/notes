@@ -36,7 +36,8 @@
 #### Packed 存储
 * Packed 存储：就是 Y 分量和 UV 分量交替着存储，比如（图中Cb、Cr 即 U、V）：
 
-	![yuyv422](yuyv422.png)
+![yuyv422](yuyv422.png)
+
 * 上图是一个 YUV422 采样的 Packed 存储，ffmpeg里叫做：yuyv422
 * 同样是 YUV422，同样是 Packed 存储，也可以有多种存储方法。
 * 比如上图是按 yuyvyuyv 这么存的，还可以按 yvyuyvyu 或者 uyvyuyvy 这么存。
@@ -44,7 +45,8 @@
 #### Planar 存储
 * Planar 存储：先连续存储所有的Y，接着存储所有的U，随后是所有的V，比如：
 
-	![yuv422p](yuv422p.png)
+![yuv422p](yuv422p.png)
+
 * 上图是一个 YUV422 采样的 Planar 存储，ffmpeg 里叫做 yuv422p
 * 同样是 YUV422，同样是 Planar 存储，也可以有多种存储方法。
 * 比如上图是按 yyyyyyyyuuuuvvvv 这么存的，还可以按 yyyyyyyyuvuvuvuv 或者 yyyyyyyyvvvvuuuu 这么存。
