@@ -25,8 +25,8 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 }
-
 #include <SDL.h>
 #include <SDL_thread.h>
 
@@ -41,8 +41,8 @@ extern "C" {
 #define av_frame_free avcodec_free_frame
 #endif
 
-#define SDL_AUDIO_BUFFER_SIZE 1024
-#define MAX_AUDIO_FRAME_SIZE 192000
+#define SDL_AUDIO_BUFFER_SIZE 4096   // SDL audio buffer in samples
+#define MAX_AUDIO_FRAME_SIZE 192000  // audio buffer in bytes
 
 typedef struct PacketQueue {
 	AVPacketList *first_pkt, *last_pkt;
@@ -67,7 +67,7 @@ int packet_queue_put(PacketQueue *q, AVPacket *pkt) {
 	if (av_dup_packet(pkt) < 0) {
 		return -1;
 	}
-	pkt1 = (AVPacketList *)av_malloc(sizeof(AVPacketList));
+	pkt1 = (AVPacketList*)av_malloc(sizeof(AVPacketList));
 	if (!pkt1)
 		return -1;
 	pkt1->pkt = *pkt;
@@ -133,7 +133,7 @@ int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf, int buf_si
 	static int audio_pkt_size = 0;
 	static AVFrame frame;
 
-	int len1, data_size = 0;
+	int len1, resampled_data_size=0;
 
 	for (;;) {
 		while (audio_pkt_size > 0) {
@@ -146,64 +146,37 @@ int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf, int buf_si
 			}
 			audio_pkt_data += len1;
 			audio_pkt_size -= len1;
-			data_size = 0;
-			if (got_frame) {			
-				data_size = av_samples_get_buffer_size(NULL,
-					aCodecCtx->channels,
-					frame.nb_samples,
-					aCodecCtx->sample_fmt,
-					1);
-				assert(data_size <= buf_size);
 
-				// 以下方法只能处理 s16p 或者 fltp 格式的 sample
-				// 目前 fltp 格式有噪声，先不搞了
-				int ch_nu = aCodecCtx->channels;
-				int samples_returned = 0; //每个声道已经返回的采样个数
-				int offset = 0; // 每条声道的采样偏移量
-				int bytes_per_sample = av_get_bytes_per_sample(aCodecCtx->sample_fmt);
-				while (samples_returned < frame.nb_samples )
-				{	
-					for (int i = 0; i < ch_nu; i++)
-					{
-						// 拷贝第 i 个声道的 1 个 sample 给 audio_buf,
-						switch (aCodecCtx->sample_fmt)
-						{
-						case AV_SAMPLE_FMT_S16P:
-						{
-							memcpy(audio_buf, frame.extended_data[i] + offset, 2);
-							audio_buf += 2;
-							break;
-						}
-						case AV_SAMPLE_FMT_FLTP:
-						{
-							float* pSample = (float*)(frame.extended_data[i] + offset);
-							float sample = *pSample;
-							if (sample < -1.0f)
-								sample = -1.0f;
-							else if (sample > 1.0f)
-								sample = 1.0f;
-							uint16_t data = (uint16_t)(sample * 32767.0f);
-							memcpy(audio_buf, &data, 2);
-							audio_buf += 2;
-							break;
-						}
-						default:
-							break;
-						}
+			if (got_frame) {
 
-					}
-					
-					offset += bytes_per_sample;
-					samples_returned++;
-				}
+				// ---------------
+
+				// 需要先把解出来的 raw audio 转换成 SDL 需要的格式
+				// 根据 raw audio 的格式 和 SDL 的格式设置 swr_ctx
+				SwrContext * swr_ctx = swr_alloc_set_opts(NULL,
+					AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_S16,44100,
+					av_get_default_channel_layout(aCodecCtx->channels),aCodecCtx->sample_fmt,aCodecCtx->sample_rate,
+					0,NULL);
+				//初始化 swr_ctx
+				swr_init(swr_ctx);
+
+				//swr_set_compensation(swr_ctx,0, frame.nb_samples*44100/ aCodecCtx->sample_rate);
+
+				//准备调用 swr_convert 的其他4个必须参数: out,out_samples_per_ch,in,in_samples_per_ch
+				uint8_t **out = &audio_buf;
+				const uint8_t **in = (const uint8_t **)frame.extended_data;
+				int out_samples_per_ch = buf_size/ (av_get_bytes_per_sample(AV_SAMPLE_FMT_S16)*2);
+				//调用 swr_convert 进行转换
+				int len2 = 0;
+				len2 = swr_convert(swr_ctx, out, out_samples_per_ch, in, frame.nb_samples);
+				resampled_data_size = len2 * 2 * av_get_bytes_per_sample(AV_SAMPLE_FMT_S16);
+				//memcpy(audio_buf, frame.data[0], data_size);
+
+				// ----------------
 				
 			}
-			if (data_size <= 0) {
-				/* No data yet, get more frames */
-				continue;
-			}
 			/* We have data, return it and come back for more later */
-			return data_size;
+			return resampled_data_size;
 		}
 		if (pkt.data)
 			av_free_packet(&pkt);
@@ -461,6 +434,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	getchar();
+
 	// Free the YUV frame
 	av_frame_free(&pFrame);
 
