@@ -154,7 +154,7 @@ int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf, int buf_si
 				// 需要先把解出来的 raw audio 转换成 SDL 需要的格式
 				// 根据 raw audio 的格式 和 SDL 的格式设置 swr_ctx
 				SwrContext * swr_ctx = swr_alloc_set_opts(NULL,
-					AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_S16,44100,
+					AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_S16, aCodecCtx->sample_rate,
 					av_get_default_channel_layout(aCodecCtx->channels),aCodecCtx->sample_fmt,aCodecCtx->sample_rate,
 					0,NULL);
 				//初始化 swr_ctx
@@ -168,7 +168,7 @@ int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf, int buf_si
 				int out_samples_per_ch = buf_size/ (av_get_bytes_per_sample(AV_SAMPLE_FMT_S16)*2);
 				//调用 swr_convert 进行转换
 				int len2 = 0;
-				len2 = swr_convert(swr_ctx, out, out_samples_per_ch, in, frame.nb_samples);
+				len2 = swr_convert(swr_ctx, out, frame.nb_samples, in, frame.nb_samples);
 				resampled_data_size = len2 * 2 * av_get_bytes_per_sample(AV_SAMPLE_FMT_S16);
 				//memcpy(audio_buf, frame.data[0], data_size);
 
