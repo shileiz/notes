@@ -39,6 +39,7 @@
 * 第一个参数传NULL，则给你生成一个 SwrContext 返回
 * 接下来三个参数是设置输出格式的，可以看到，用来描述声道信息的是 layout 而不是 声道个数。
 * 再接下三个参数是输入格式。最后两个参数先不用管。
+* 用 `swr_init(SwrContext swr_ctx)` 初始化
 * 用 `swr_convert()` 进行转换格式
 
         /** Convert audio.
@@ -55,3 +56,13 @@
                                         const uint8_t **in , int in_count);
          
 
+### ffplay 对 Audio 格式的处理
+* 用SDL播放声音，SDL打开音频设备的主要参数:
+	* format: 写死了 `wanted_spec.format = AUDIO_S16SYS;`
+	* sample rate: 让用户（程序员）设定 `wanted_spec.freq = wanted_sample_rate;`
+	* channels: SDL优先，用户设定其次，好几行代码就不贴在这里了，详见 `audio_open` 函数最开始的几行
+* 解码出来的音频用 `swr_convert()` 进行转换格式以达到SDL设备要求，输出参数：
+	* format： 写死了 `audio_hw_params->fmt = AV_SAMPLE_FMT_S16;`，以便跟SDL对应。
+	* sample rate：根据SDL打开音频设备后返回的实际值设定：`audio_hw_params->freq = spec.freq;`
+	* channels： 根据SDL打开音频设备后返回的实际值设定： `audio_hw_params->channels =  spec.channels;`
+	* channels 稍微复杂，因为还弄了一个 `audio_hw_params->channel_layout = wanted_channel_layout;` 以保证channels的准确性
