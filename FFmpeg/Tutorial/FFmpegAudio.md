@@ -66,3 +66,10 @@
 	* sample rate：根据SDL打开音频设备后返回的实际值设定：`audio_hw_params->freq = spec.freq;`
 	* channels： 根据SDL打开音频设备后返回的实际值设定： `audio_hw_params->channels =  spec.channels;`
 	* channels 稍微复杂，因为还弄了一个 `audio_hw_params->channel_layout = wanted_channel_layout;` 以保证channels的准确性
+
+
+### 尽量不要转换 sample rate
+* 打开SDL音频设备之前，先读出来当前播放的文件的 sample rate，然后以这个 sample rate 去打开音频设备
+* 不要写死打开音频设备时的 sample rate，然后再用 `swr_convert() `去把文件里的 sample rate 转成音频设备的
+* 因为改变 sample rate 的转换会失真，听起来有噪声
+* 这个问题耽误了我4天时间。。。
