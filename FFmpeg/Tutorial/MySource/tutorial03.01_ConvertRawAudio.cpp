@@ -27,13 +27,14 @@ extern "C" {
 #include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
 }
-#include <SDL.h>
-#include <SDL_thread.h>
+#include <sdl/SDL.h>
+#include <sdl/SDL_thread.h>
 
 #undef main /* Prevents SDL from overriding main() */
 
 #include <stdio.h>
 #include <assert.h>
+#include <Windows.h>
 
 // compatibility with newer API
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(55,28,1)
@@ -55,6 +56,10 @@ typedef struct PacketQueue {
 PacketQueue audioq;
 
 int quit = 0;
+
+//暂且作为全局变量
+SwrContext * swr_ctx = NULL;
+
 
 void packet_queue_init(PacketQueue *q) {
 	memset(q, 0, sizeof(PacketQueue));
@@ -132,7 +137,6 @@ int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf, int buf_si
 	static uint8_t *audio_pkt_data = NULL;
 	static int audio_pkt_size = 0;
 	static AVFrame frame;
-
 	int len1, resampled_data_size=0;
 
 	for (;;) {
@@ -151,21 +155,10 @@ int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf, int buf_si
 
 				// ---------------
 
-				// 需要先把解出来的 raw audio 转换成 SDL 需要的格式
-				// 根据 raw audio 的格式 和 SDL 的格式设置 swr_ctx
-				SwrContext * swr_ctx = swr_alloc_set_opts(NULL,
-					AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_S16, aCodecCtx->sample_rate,
-					av_get_default_channel_layout(aCodecCtx->channels),aCodecCtx->sample_fmt,aCodecCtx->sample_rate,
-					0,NULL);
-				//初始化 swr_ctx
-				swr_init(swr_ctx);
-
-				//swr_set_compensation(swr_ctx,0, frame.nb_samples*44100/ aCodecCtx->sample_rate);
-
 				//准备调用 swr_convert 的其他4个必须参数: out,out_samples_per_ch,in,in_samples_per_ch
 				uint8_t **out = &audio_buf;
 				const uint8_t **in = (const uint8_t **)frame.extended_data;
-				int out_samples_per_ch = buf_size/ (av_get_bytes_per_sample(AV_SAMPLE_FMT_S16)*2);
+				//int out_samples_per_ch = buf_size/ (av_get_bytes_per_sample(AV_SAMPLE_FMT_S16)*2);
 				//调用 swr_convert 进行转换
 				int len2 = 0;
 				len2 = swr_convert(swr_ctx, out, frame.nb_samples, in, frame.nb_samples);
@@ -191,6 +184,7 @@ int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf, int buf_si
 		audio_pkt_data = pkt.data;
 		audio_pkt_size = pkt.size;
 	}
+	
 }
 
 void audio_callback(void *userdata, Uint8 *stream, int len) {
@@ -310,6 +304,14 @@ int main(int argc, char *argv[]) {
 	wanted_spec.samples = SDL_AUDIO_BUFFER_SIZE;
 	wanted_spec.callback = audio_callback;
 	wanted_spec.userdata = aCodecCtx;
+	// 需要先把解出来的 raw audio 转换成 SDL 需要的格式
+	// 根据 raw audio 的格式 和 SDL 的格式设置 swr_ctx
+	swr_ctx = swr_alloc_set_opts(NULL,
+		AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_S16, aCodecCtx->sample_rate,
+		av_get_default_channel_layout(aCodecCtx->channels), aCodecCtx->sample_fmt, aCodecCtx->sample_rate,
+		0, NULL);
+	//初始化 swr_ctx
+	swr_init(swr_ctx);
 
 	if (SDL_OpenAudio(&wanted_spec, &spec) < 0) {
 		fprintf(stderr, "SDL_OpenAudio: %s\n", SDL_GetError());
@@ -411,6 +413,10 @@ int main(int argc, char *argv[]) {
 				rect.h = pCodecCtx->height;
 				SDL_DisplayYUVOverlay(bmp, &rect);
 				av_free_packet(&packet);
+				Sleep(40);
+			}
+			else {
+				av_free_packet(&packet);
 			}
 		}
 		else if (packet.stream_index == audioStream) {
@@ -433,8 +439,6 @@ int main(int argc, char *argv[]) {
 
 	}
 
-	getchar();
-
 	// Free the YUV frame
 	av_frame_free(&pFrame);
 
@@ -447,5 +451,7 @@ int main(int argc, char *argv[]) {
 	// Close the video file
 	avformat_close_input(&pFormatCtx);
 
+	// free swr context
+	swr_free(&swr_ctx);
 	return 0;
 }
