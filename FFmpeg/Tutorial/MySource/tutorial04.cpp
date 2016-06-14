@@ -85,6 +85,8 @@ typedef struct VideoState {
 	AVPacket        audio_pkt;
 	uint8_t         *audio_pkt_data;
 	int             audio_pkt_size;
+	SwrContext		*swr_ctx;
+	
 	AVStream        *video_st;
 	AVCodecContext  *video_ctx;
 	PacketQueue     videoq;
@@ -196,29 +198,19 @@ int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size) {
 
 				// ---------------
 
-				// 需要先把解出来的 raw audio 转换成 SDL 需要的格式
-				// 根据 raw audio 的格式 和 SDL 的格式设置 swr_ctx
-				SwrContext * swr_ctx = swr_alloc_set_opts(NULL,
-					AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_S16, is->audio_ctx->sample_rate,
-					av_get_default_channel_layout(is->audio_ctx->channels), is->audio_ctx->sample_fmt, is->audio_ctx->sample_rate,
-					0, NULL);
-				//初始化 swr_ctx
-				swr_init(swr_ctx);
 
 				//swr_set_compensation(swr_ctx,0, frame.nb_samples*44100/ aCodecCtx->sample_rate);
 
 				//准备调用 swr_convert 的其他4个必须参数: out,out_samples_per_ch,in,in_samples_per_ch
 				uint8_t **out = &audio_buf;
 				const uint8_t **in = (const uint8_t **)is->audio_frame.extended_data;
-				int out_samples_per_ch = buf_size / (av_get_bytes_per_sample(AV_SAMPLE_FMT_S16) * 2);
 				//调用 swr_convert 进行转换
 				int len2 = 0;
-				len2 = swr_convert(swr_ctx, out, is->audio_frame.nb_samples, in, is->audio_frame.nb_samples);
+				len2 = swr_convert(is->swr_ctx, out, is->audio_frame.nb_samples, in, is->audio_frame.nb_samples);
 				resampled_data_size = len2 * 2 * av_get_bytes_per_sample(AV_SAMPLE_FMT_S16);
 				//memcpy(audio_buf, frame.data[0], data_size);
 
 				// ----------------
-
 
 			}
 			is->audio_pkt_data += len1;
@@ -305,6 +297,11 @@ void video_display(VideoState *is) {
 	}
 }
 
+/*
+	每次timer到时间会进来（timer到时间发 FF_REFRESH_EVENT，收到 FF_REFRESH_EVENT 会进来）
+	一个timer只进一次timer就失效了。不过本函数里面会再起一个timer。
+	从is->pictq拿出一个 VideoPicture 进行显示，然后pictq的读指针向前移动一步
+*/
 void video_refresh_timer(void *userdata) {
 
 	VideoState *is = (VideoState *)userdata;
@@ -315,7 +312,7 @@ void video_refresh_timer(void *userdata) {
 			schedule_refresh(is, 1);
 		}
 		else {
-			vp = &is->pictq[is->pictq_rindex];
+			//vp = &is->pictq[is->pictq_rindex];
 			/* Now, normally here goes a ton of code
 			about timing, etc. we're just going to
 			guess at a delay for now. You can
@@ -343,6 +340,9 @@ void video_refresh_timer(void *userdata) {
 	}
 }
 
+/*
+	为写指针所在的VideoPicture（is->pictq[is->pictq_windex]）在堆空间分配一个 SDL_Overlay
+*/
 void alloc_picture(void *userdata) {
 
 	VideoState *is = (VideoState *)userdata;
@@ -434,6 +434,11 @@ int queue_picture(VideoState *is, AVFrame *pFrame) {
 	return 0;
 }
 
+/*
+	从 is->videoq 拿出一个 packet 解码，把解出来的 frame 里的图像转为 VideoPicture 放到 is->pictq 里。然后释放掉拿出来的 packet。
+	目前 is->pictq 的长度是 1：#define VIDEO_PICTURE_QUEUE_SIZE 1，所以每次只能放进去一个frame，放的过程中如果发现 pictq 满了，则等待 pictq_cond 发生
+
+*/
 int video_thread(void *arg) {
 	VideoState *is = (VideoState *)arg;
 	AVPacket pkt1, *packet = &pkt1;
@@ -514,6 +519,14 @@ int stream_component_open(VideoState *is, int stream_index) {
 		is->audio_buf_index = 0;
 		memset(&is->audio_pkt, 0, sizeof(is->audio_pkt));
 		packet_queue_init(&is->audioq);
+		// 需要先把解出来的 raw audio 转换成 SDL 需要的格式
+		// 根据 raw audio 的格式 和 SDL 的格式设置 swr_ctx
+		is->swr_ctx = swr_alloc_set_opts(NULL,
+			AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_S16, is->audio_ctx->sample_rate,
+			av_get_default_channel_layout(is->audio_ctx->channels), is->audio_ctx->sample_fmt, is->audio_ctx->sample_rate,
+			0, NULL);
+		//初始化 swr_ctx
+		swr_init(is->swr_ctx);
 		SDL_PauseAudio(0);
 		break;
 	case AVMEDIA_TYPE_VIDEO:
@@ -668,8 +681,15 @@ int main(int argc, char *argv[]) {
 	is->pictq_mutex = SDL_CreateMutex();
 	is->pictq_cond = SDL_CreateCond();
 
+	// 40ms 后发一个 FF_REFRESH_EVENT 事件，让timer转起来
 	schedule_refresh(is, 40);
 
+	/*
+	开一个线程去demux，把读到的packet放到is->audioq或is->videoq里，如果放的过程中queue满了，就睡10毫秒再放
+	这个线程进入循环读packet之前会先做一些初始化工作，包括打开input，初始化codec（给is->audio_st等一系列赋值）
+	初始化工作中会开一个线程：is->video_tid = SDL_CreateThread(video_thread, is);
+	对应Audio而言在初始化中直接调用了 SDL_PauseAudio(0);
+	*/
 	is->parse_tid = SDL_CreateThread(decode_thread, is);
 	if (!is->parse_tid) {
 		av_free(is);
