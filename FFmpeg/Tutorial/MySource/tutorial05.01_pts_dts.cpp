@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
 	uint8_t           *buffer = NULL;
 	struct SwsContext *sws_ctx = NULL;
 	char			  csv_name[200];
-	memset(csv_name,0,sizeof(csv_name));
+	memset(csv_name, 0, sizeof(csv_name));
 	FILE			  *csv_file = NULL;
 
 	if (argc < 2) {
@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
 
 
 
-	// Find the first video stream
+				   // Find the first video stream
 	videoStream = -1;
 	for (i = 0; i<pFormatCtx->nb_streams; i++)
 		if (pFormatCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) {
@@ -105,13 +105,14 @@ int main(int argc, char *argv[]) {
 		NULL,
 		NULL,
 		NULL
-	);
+		);
 
 	// Read frames and save first five frames to disk
-	strcat(csv_name,argv[1]);
-	strcat(csv_name,".csv");
-	csv_file = fopen(csv_name,"w");
-	fprintf(csv_file,"dts,pts,after-dts,after-pts,gotframe\n");
+	strcat(csv_name, argv[1]);
+	strcat(csv_name, ".csv");
+	//csv_file = fopen(csv_name, "w");
+	//fprintf(csv_file, "dts,pts,after-dts,after-pts,gotframe\n");
+	int pts = 0;
 	i = 0;
 	int64_t last_dts = -10000;
 	while (av_read_frame(pFormatCtx, &packet) >= 0) {
@@ -119,32 +120,44 @@ int main(int argc, char *argv[]) {
 		// Is this a packet from the video stream?
 		if (packet.stream_index == videoStream) {
 			// Decode video frame
-			fprintf(csv_file,"%d,%d,",packet.dts,packet.pts);
+			//fprintf(csv_file, "%d,%d,", packet.dts, packet.pts);
 			if (packet.dts < last_dts) {
 				puts(argv[1]);
-				printf("当前 packet 的 dts 比上个 packet 的 dts 小。\n当前是第%d个 packet\n",i);
-				printf("上一个 packet 的 dts 是：%d\n当前 packet 的 dts 是：%d\n",last_dts,packet.dts);
+				printf("当前 packet 的 dts 比上个 packet 的 dts 小。\n当前是第%d个 packet\n", i);
+				printf("上一个 packet 的 dts 是：%d\n当前 packet 的 dts 是：%d\n", last_dts, packet.dts);
 				system("pause");
 			}
 			last_dts = packet.dts;
 			avcodec_decode_video2(pCodecCtx, pFrame, &frameFinished, &packet);
-			fprintf(csv_file, "%d,%d,", packet.dts, packet.pts);
+			//fprintf(csv_file, "%d,%d,", packet.dts, packet.pts);
 			if (last_dts != packet.dts) {
 				puts(argv[1]);
 				printf("当前 packet 经过解码之后，dts发生了变化。\n当前是第%d个 packet\n", i);
-				printf("解码之前的 dts 是：%d，解码之后的dts是：%d\n", last_dts,packet.dts);
+				printf("解码之前的 dts 是：%d，解码之后的dts是：%d\n", last_dts, packet.dts);
 				system("pause");
 			}
+
+
 			// Did we get a video frame?
 			if (frameFinished) {
-				fprintf(csv_file, "true\n");
+				//fprintf(csv_file, "true\n");
 				// Convert the image from its native format to RGB
+				pts = av_frame_get_best_effort_timestamp(pFrame);
+				if (pts != AV_NOPTS_VALUE)
+				{
+					if (pts != packet.pts)
+					{
+						printf("pts != packet.pts, 当前是第%d个 packet, pts=%d, packet.pts=%d,相差 %d\n", i,pts,packet.pts,packet.pts-pts);
+						//system("pause");
+					}
+				}
+
 				sws_scale(sws_ctx, (uint8_t const * const *)pFrame->data,
 					pFrame->linesize, 0, pCodecCtx->height,
 					pFrameRGB->data, pFrameRGB->linesize);
 			}
 			else {
-				fprintf(csv_file, "false\n");
+				//fprintf(csv_file, "false\n");
 			}
 		}
 
