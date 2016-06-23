@@ -53,8 +53,14 @@ typedef struct PacketQueue {
 } PacketQueue;
 
 PacketQueue audioq;
+PacketQueue videoq;
+SDL_Rect        rect;
+SDL_Overlay     *bmp;
+struct SwsContext *sws_ctx = NULL;
 
 int quit = 0;
+
+
 
 void packet_queue_init(PacketQueue *q) {
 	memset(q, 0, sizeof(PacketQueue));
@@ -125,6 +131,50 @@ static int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
 	SDL_UnlockMutex(q->mutex);
 	return ret;
 }
+
+Uint32 vdieo_refresh_callback(Uint32 interval, void *param) {
+	static AVPacket packet;
+	// Allocate video frame
+	static AVFrame frame;
+	int   frameFinished;
+	AVCodecContext *pCodecCtx = (AVCodecContext *)param;
+
+	packet_queue_get(&videoq, &packet, 1);
+
+
+	// Decode video frame
+	avcodec_decode_video2(pCodecCtx, &frame, &frameFinished, &packet);
+
+	// Did we get a video frame?
+	if (frameFinished) {
+		SDL_LockYUVOverlay(bmp);
+
+		AVPicture pict;
+		pict.data[0] = bmp->pixels[0];
+		pict.data[1] = bmp->pixels[2];
+		pict.data[2] = bmp->pixels[1];
+
+		pict.linesize[0] = bmp->pitches[0];
+		pict.linesize[1] = bmp->pitches[2];
+		pict.linesize[2] = bmp->pitches[1];
+
+		// Convert the image into YUV format that SDL uses	
+		sws_scale(sws_ctx, (uint8_t const * const *)frame.data,
+			frame.linesize, 0, pCodecCtx->height,
+			pict.data, pict.linesize);
+
+		SDL_UnlockYUVOverlay(bmp);
+
+		rect.x = 0;
+		rect.y = 0;
+		rect.w = pCodecCtx->width;
+		rect.h = pCodecCtx->height;
+		SDL_DisplayYUVOverlay(bmp, &rect);
+		av_free_packet(&packet);
+	}
+	return interval;
+}
+
 
 int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf, int buf_size) {
 
@@ -259,18 +309,17 @@ int main(int argc, char *argv[]) {
 	AVCodecContext  *pCodecCtxOrig = NULL;
 	AVCodecContext  *pCodecCtx = NULL;
 	AVCodec         *pCodec = NULL;
-	AVFrame         *pFrame = NULL;
+	//AVFrame         *pFrame = NULL;
 	AVPacket        packet;
-	int             frameFinished;
-	struct SwsContext *sws_ctx = NULL;
+//	struct SwsContext *sws_ctx = NULL;
 
 	AVCodecContext  *aCodecCtxOrig = NULL;
 	AVCodecContext  *aCodecCtx = NULL;
 	AVCodec         *aCodec = NULL;
 
-	SDL_Overlay     *bmp;
+//	SDL_Overlay     *bmp;
 	SDL_Surface     *screen;
-	SDL_Rect        rect;
+//	SDL_Rect        rect;
 	SDL_Event       event;
 	SDL_AudioSpec   wanted_spec, spec;
 
@@ -370,8 +419,7 @@ int main(int argc, char *argv[]) {
 	if (avcodec_open2(pCodecCtx, pCodec, NULL)<0)
 		return -1; // Could not open codec
 
-				   // Allocate video frame
-	pFrame = av_frame_alloc();
+
 
 	// Make a screen to put our video
 
@@ -406,39 +454,13 @@ int main(int argc, char *argv[]) {
 
 	// Read frames and save first five frames to disk
 	i = 0;
+
+	packet_queue_init(&videoq);
+	SDL_AddTimer(40, vdieo_refresh_callback, pCodecCtx);
 	while (av_read_frame(pFormatCtx, &packet) >= 0) {
 		// Is this a packet from the video stream?
 		if (packet.stream_index == videoStream) {
-			// Decode video frame
-			avcodec_decode_video2(pCodecCtx, pFrame, &frameFinished, &packet);
-
-			// Did we get a video frame?
-			if (frameFinished) {
-				SDL_LockYUVOverlay(bmp);
-
-				AVPicture pict;
-				pict.data[0] = bmp->pixels[0];
-				pict.data[1] = bmp->pixels[2];
-				pict.data[2] = bmp->pixels[1];
-
-				pict.linesize[0] = bmp->pitches[0];
-				pict.linesize[1] = bmp->pitches[2];
-				pict.linesize[2] = bmp->pitches[1];
-
-				// Convert the image into YUV format that SDL uses	
-				sws_scale(sws_ctx, (uint8_t const * const *)pFrame->data,
-					pFrame->linesize, 0, pCodecCtx->height,
-					pict.data, pict.linesize);
-
-				SDL_UnlockYUVOverlay(bmp);
-
-				rect.x = 0;
-				rect.y = 0;
-				rect.w = pCodecCtx->width;
-				rect.h = pCodecCtx->height;
-				SDL_DisplayYUVOverlay(bmp, &rect);
-				av_free_packet(&packet);
-			}
+			packet_queue_put(&videoq, &packet);
 		}
 		else if (packet.stream_index == audioStream) {
 			packet_queue_put(&audioq, &packet);
@@ -462,7 +484,7 @@ int main(int argc, char *argv[]) {
 
 	getchar();
 	// Free the YUV frame
-	av_frame_free(&pFrame);
+	//av_frame_free(&pFrame);
 
 	// Close the codecs
 	avcodec_close(pCodecCtxOrig);
