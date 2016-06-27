@@ -250,7 +250,9 @@ int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size, double 
 			}
 			pts = is->audio_clock;
 			*pts_ptr = pts;
-			n = 2 * is->audio_ctx->channels;
+			// 2 means: 2 bytes/sample
+			n = 2 * is->audio_ctx->channels; 
+			// 这里除出来是个秒数，表示这次解码出来的音频数据能播几秒
 			is->audio_clock += (double)resampled_data_size /
 				(double)(n * is->audio_ctx->sample_rate);
 			/* We have data, return it and come back for more later */
@@ -269,6 +271,7 @@ int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size, double 
 		is->audio_pkt_data = pkt->data;
 		is->audio_pkt_size = pkt->size;
 		/* if update, update the audio clock w/pts */
+		// audio_clock 就是当前 pkt 的 pts，当当前 pkt 解码完了之后，再加上解码出来的数据能持续的时间。
 		if (pkt->pts != AV_NOPTS_VALUE) {
 			is->audio_clock = av_q2d(is->audio_st->time_base)*pkt->pts;
 		}
@@ -380,40 +383,23 @@ void video_refresh_timer(void *userdata) {
 
 			delay = vp->pts - is->frame_last_pts; /* the pts from last time */
 			
-	
-			//if (delay <= 0 || delay >= 1.0) {
-			//	/* if incorrect delay, use previous one */
-			//	delay = is->frame_last_delay;
-			//}
-			///* save for next time */
-			//is->frame_last_delay = delay;
-
-			
 			is->frame_last_pts = vp->pts;
 
 			///* update delay to sync to audio */
-			//ref_clock = get_audio_clock(is);
-			//diff = vp->pts - ref_clock;
+			ref_clock = get_audio_clock(is);
+			diff = vp->pts - ref_clock;
 
 			///* Skip or repeat the frame. Take delay into account
 			//FFPlay still doesn't "know if this is the best guess." */
-			//sync_threshold = (delay > AV_SYNC_THRESHOLD) ? delay : AV_SYNC_THRESHOLD;
-			//if (fabs(diff) < AV_NOSYNC_THRESHOLD) {
-			//	if (diff <= -sync_threshold) {
-			//		delay = 0;
-			//	}
-			//	else if (diff >= sync_threshold) {
-			//		delay = 2 * delay;
-			//	}
-			//}
-			//is->frame_timer += delay;
-			///* computer the REAL delay */
-			//actual_delay = delay;
-			//if (actual_delay < 0.010) {
-			//	/* Really it should skip the picture instead */
-			//	actual_delay = 0.010;
-			//}
-
+			sync_threshold = (delay > AV_SYNC_THRESHOLD) ? delay : AV_SYNC_THRESHOLD;
+			if (fabs(diff) < AV_NOSYNC_THRESHOLD) {
+				if (diff <= -sync_threshold) {
+					delay = 0;
+				}
+				else if (diff >= sync_threshold) {
+					delay = 2 * delay;
+				}
+			}
 			if (delay < 0.010) delay = 0.010;
 			printf("delay=%lf\n",delay);
 			schedule_refresh(is, (int)(delay * 1000 + 0.5));

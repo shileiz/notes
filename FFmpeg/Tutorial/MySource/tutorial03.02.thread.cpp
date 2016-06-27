@@ -134,7 +134,7 @@ static int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
 	return ret;
 }
 
-static Uint32 video_refresh_timer(Uint32 interval, void *opaque) {
+static Uint32 send_refresh_video_event(Uint32 interval, void *opaque) {
 	SDL_Event event;
 	event.type = SDL_USEREVENT;
 	event.user.data1 = opaque;
@@ -445,7 +445,9 @@ int main(int argc, char *argv[]) {
 		);
 
 	//开启视频 解码/显示 线程
-	SDL_AddTimer(42, video_refresh_timer, pCodecCtx);
+	AVRational frame_rate = av_guess_frame_rate(pFormatCtx,pFormatCtx->streams[videoStream],NULL);
+	int delay = (int)(av_q2d(av_inv_q(frame_rate))*1000);
+	SDL_AddTimer(delay, send_refresh_video_event, pCodecCtx);
 
 	for (;;) {
 		SDL_WaitEvent(&event);

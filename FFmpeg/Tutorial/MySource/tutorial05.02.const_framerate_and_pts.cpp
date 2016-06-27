@@ -321,7 +321,10 @@ void video_refresh_timer(void *userdata) {
 			/* -------------------- */
 			vp = &is->pictq[is->pictq_rindex];
 			delay_calc_by_pts = vp->pts - is->last_frame_pts;
-			delay_calc_by_framerate = 1/av_q2d(is->video_ctx->framerate);
+			AVRational frame_rate_guess = av_guess_frame_rate(is->pFormatCtx, is->video_st, NULL);
+			AVRational frame_rate_CodecCtx = is->video_ctx->framerate;
+			AVRational frame_rate_Stream = is->video_st->r_frame_rate;
+			delay_calc_by_framerate = av_q2d(av_inv_q(frame_rate_guess));
 			printf("delay_calc_by_pts      : %lf\n", delay_calc_by_pts);
 			printf("delay_calc_by_framerate: %lf\n", delay_calc_by_framerate);
 			is->last_frame_pts = vp->pts;
@@ -626,11 +629,13 @@ int decode_thread(void *arg) {
 			break;
 		}
 		// seek stuff goes here
+		/*
 		if (is->audioq.size > MAX_AUDIOQ_SIZE ||
 			is->videoq.size > MAX_VIDEOQ_SIZE) {
 			SDL_Delay(10);
 			continue;
 		}
+		*/
 		if (av_read_frame(is->pFormatCtx, packet) < 0) {
 			break;
 		}
