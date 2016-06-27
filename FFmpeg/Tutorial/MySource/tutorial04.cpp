@@ -609,11 +609,16 @@ int decode_thread(void *arg) {
 			break;
 		}
 		// seek stuff goes here
+		// 暂时把以下这个判断注掉，不显示packet queue的大小
+		// 不然的话，可能因为视频消耗packet比较慢（比如我们强制41ms刷新一次），导致视频queue超过max
+		// 此时如果不再读包，会导致音频没包可解，听起来就是杂音
+		/*
 		if (is->audioq.size > MAX_AUDIOQ_SIZE ||
 			is->videoq.size > MAX_VIDEOQ_SIZE) {
 			SDL_Delay(10);
 			continue;
 		}
+		*/
 		if (av_read_frame(is->pFormatCtx, packet) < 0) {
 			break;
 		}
