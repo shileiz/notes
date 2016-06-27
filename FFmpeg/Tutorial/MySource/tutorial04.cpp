@@ -28,8 +28,8 @@ extern "C" {
 #include <libswresample/swresample.h>
 }
 
-#include <SDL.h>
-#include <SDL_thread.h>
+#include <sdl/SDL.h>
+#include <sdl/SDL_thread.h>
 
 
 #undef main /* Prevents SDL from overriding main() */
@@ -320,7 +320,7 @@ void video_refresh_timer(void *userdata) {
 			the timing - but I don't suggest that ;)
 			We'll learn how to do it for real later.
 			*/
-			schedule_refresh(is, 40);
+			schedule_refresh(is, 41);
 
 			/* show the picture! */
 			video_display(is);
