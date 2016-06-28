@@ -116,6 +116,8 @@ typedef struct VideoState {
 
 SDL_Surface     *screen;
 SDL_mutex       *screen_mutex;
+int count_pict=0, count_delay_is_zero=0;
+
 
 /* Since we only have one decoding thread, the Big Struct
 can be global in case we need it. */
@@ -207,7 +209,16 @@ double get_audio_clock(VideoState *is) {
 	return pts;
 }
 
-int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size, double *pts_ptr) {
+
+
+/*
+	从 audio 的 pktq 里拿出 pkt 进行解码，解出来的数据放入 audio_buf
+	经过简化，第三个参数 buf_size 没有使用，按理说应该检测写入 audio_buf 的数据不超过 buf_size 的
+	只要有1帧数据解出来，本函数就返回。无论是消耗了一个，不到一个，还是多于一个的 pkt。
+	当前拿到的 pkt 的状态由全局变量 is->audio_pkt_size, is->audio_pkt_data 来保管，所以不会丢。
+	返回值：往 audio_buf 写了多少字节的数据。
+*/
+int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size) {
 
 	int len1, resampled_data_size = 0;
 	AVPacket *pkt = &is->audio_pkt;
@@ -215,6 +226,10 @@ int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size, double 
 	int n;
 
 	for (;;) {
+
+		// 只要解出来数据了，就会 return
+		// 如果没解出来，则这个 while 保证消耗完这个 pkt，因为一次调用 avcodec_decode_audio4
+		// 不保证消耗完一个 pkt
 		while (is->audio_pkt_size > 0) {
 			int got_frame = 0;
 			len1 = avcodec_decode_audio4(is->audio_ctx, &is->audio_frame, &got_frame, pkt);
@@ -228,7 +243,6 @@ int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size, double 
 
 				// ---------------
 
-
 				//swr_set_compensation(swr_ctx,0, frame.nb_samples*44100/ aCodecCtx->sample_rate);
 
 				//准备调用 swr_convert 的其他4个必须参数: out,out_samples_per_ch,in,in_samples_per_ch
@@ -238,7 +252,6 @@ int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size, double 
 				int len2 = 0;
 				len2 = swr_convert(is->swr_ctx, out, is->audio_frame.nb_samples, in, is->audio_frame.nb_samples);
 				resampled_data_size = len2 * 2 * av_get_bytes_per_sample(AV_SAMPLE_FMT_S16);
-				//memcpy(audio_buf, frame.data[0], data_size);
 
 				// ----------------
 			}
@@ -249,7 +262,6 @@ int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size, double 
 				continue;
 			}
 			pts = is->audio_clock;
-			*pts_ptr = pts;
 			// 2 means: 2 bytes/sample
 			n = 2 * is->audio_ctx->channels; 
 			// 这里除出来是个秒数，表示这次解码出来的音频数据能播几秒
@@ -257,7 +269,10 @@ int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size, double 
 				(double)(n * is->audio_ctx->sample_rate);
 			/* We have data, return it and come back for more later */
 			return resampled_data_size;
-		}
+		} /*end of while*/
+		
+		
+		// 如果一个 pkt 已经消耗完了，还没解出数据，再拿一个 pkt。
 		if (pkt->data)
 			av_free_packet(pkt);
 
@@ -278,16 +293,19 @@ int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size, double 
 	}
 }
 
+/*
+	每当音频设备没有数据了，就会调用这个函数来要数据，让本函数往 stream 里写入 len 这么长的音频数据。
+	本函数会调用 audio_decode_frame 获得音频数据，写入 stream，写满了 len 这么长为止。
+	可能调用 audio_decode_frame 多次，也可能只调用一次，总之写满了 len 就不调了。
+*/
 void audio_callback(void *userdata, Uint8 *stream, int len) {
-
 	VideoState *is = (VideoState *)userdata;
 	int len1, audio_size;
-	double pts;
 
 	while (len > 0) {
 		if (is->audio_buf_index >= is->audio_buf_size) {
 			/* We have already sent all our data; get more */
-			audio_size = audio_decode_frame(is, is->audio_buf, sizeof(is->audio_buf), &pts);
+			audio_size = audio_decode_frame(is, is->audio_buf, sizeof(is->audio_buf));
 			if (audio_size < 0) {
 				/* If error, output silence */
 				is->audio_buf_size = 1024;
@@ -385,23 +403,25 @@ void video_refresh_timer(void *userdata) {
 			
 			is->frame_last_pts = vp->pts;
 
-			///* update delay to sync to audio */
+			/* ----------- */
+			/*音视频同步*/
 			ref_clock = get_audio_clock(is);
 			diff = vp->pts - ref_clock;
-
-			///* Skip or repeat the frame. Take delay into account
-			//FFPlay still doesn't "know if this is the best guess." */
-			sync_threshold = (delay > AV_SYNC_THRESHOLD) ? delay : AV_SYNC_THRESHOLD;
-			if (fabs(diff) < AV_NOSYNC_THRESHOLD) {
-				if (diff <= -sync_threshold) {
-					delay = 0;
-				}
-				else if (diff >= sync_threshold) {
-					delay = 2 * delay;
-				}
+			if (diff <= -0.015) {
+				delay = 0;
 			}
-			if (delay < 0.010) delay = 0.010;
-			printf("delay=%lf\n",delay);
+			else if (diff >= 0.015) {
+				delay = 2 * delay;
+			}
+			/* ----------- */
+
+
+			if (delay == 0) {
+				count_delay_is_zero++;
+				delay = 0.010;
+			}
+			count_pict++;
+			printf("delay==0 percentage is %lf",(double)count_delay_is_zero/count_pict);
 			schedule_refresh(is, (int)(delay * 1000 + 0.5));
 
 			/* show the picture! */
