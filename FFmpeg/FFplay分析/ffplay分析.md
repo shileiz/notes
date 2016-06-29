@@ -91,3 +91,62 @@
 		    f->rindex_shown = 0;
 		    return ret;
 		}
+
+##### pictq 里图片的进
+* 前面已经说了，是 `video_thread` 负责往 pictq 里写图片
+* 写入的图片的 pts 是以秒为单位的（已经乘以了相应的 time base）
+
+##### pictq 里图片的出
+* 一般情况下，`rindex_shown` == 1
+* 即，一般情况下，`rindex` 指向刚刚显示过的那个 pict，而 `rindex+rindex_shown` 指向尚未显示即将要显示的那个 pict
+* 所以我们用 `frame_queue_peek` 得到即将要显示的 pict，用 `frame_queue_peek_last` 得到刚刚显示过的 pict
+* 每当我们显示完一张图片（显示的是 `rindex+rindex_shown` 指向的图片），就把 `rindex++`，让读指针前进一步，而 `rindex_shown` 保持不变。
+* 这就仍然保持了 pictq 里，`rindex` 指向刚刚显示过的那个 pict，而 `rindex+rindex_shown` 指向尚未显示即将要显示的那个 pict 的状态。
+
+### `av_gettime_relative`
+* 获取当前时间，以微妙为单位。这个函数获取的当前时间是从系统（电脑/手机）启动算起的，而不是1970年1月1日0点0分。
+* `av_gettime` 获取的时间是从1970年1月1日0点0分开始的。也是以微妙为单位。
+* 其实在 ffplay 里使用这两个函数哪个都行，反正是用来计算相对值的，只要能体现出两次到达同一个代码点流逝的时间就可以了。
+
+### 主循环
+* main 函数的最后进入 `event_loop(is)`, 这是个死循环永不返回
+* 把 `event_loop` 稍作展开是这样子的：
+
+		for(;;){
+			while(拿不到event){
+				av_usleep(remaining_time 秒);
+				remain_time = 0.01;
+				video_refresh(is,&remaining_time);
+			}
+			处理event（键盘、鼠标等事件）
+		} 
+* 可见，主循环里一直在进行 `sleep-->video_refresh` 的循环，除非有 event 发生时，偶尔出来处理一下event，然后立刻又回到这个循环。
+* 具体 sleep 多少时间：remaining_time 秒，这个数是由 `video_refresh()` 设定的。
+* `video_refresh()` 干的事儿就是：显示下一幅图像，如果尚未到显示这张图像的时间，则不显示直接返回，并把需要等多久通过参数 `remaining_time` 带出来。
+
+
+### avsync：音视频同步
+
+##### 一些前提
+* 先澄清一下在后续分析中的用语：
+	* 当前帧 == 当前图像 == 即将显示、尚未显示的图像
+	* 前一帧 == 刚刚显示过的图像
+	* 下一帧 == 当前帧的下一帧 == 即将显示的图像的下一幅图像
+* 按照 ffplay 默认的，以音频时钟作为主时钟，即视频向音频对其为例进行分析
+
+##### `is->frame_timer`
+* `frame_timer`: 表示的是某次准备显示一副图像时的 time，并从那时开始累加每一次的显示图像前的 delay。
+* 一旦 `frame_timer` 和 time 差的太多了，就把 `frame_timer` 调整为 time。
+* 理论上，`frame_timer` 应该一直等于 time。
+* 因为 `frame_timer` = 上次显示图片之前得到的time + 上一张图片需要的delay ，
+* 而 time 等于当前准备要显示图片之前得到的时间
+* 但是整个 ffplay 运行需要一点点时间，比如计算 delay 啥的，还有循环里的其他一些判断，多多少少需要一点时间
+* 这样，`frame_timer` 就渐渐跟 time 拉开了差距。这时候就需要把 `frame_timer` 更新成当前的 time。
+* 可以理解为，`frame_timer` 是实际发生的所有delay的累积，所谓“实际发生”是因为delay针对音视频同步做了调整，而不仅仅是上一帧图片的 duration。并且，这个累积值归一化到了当前时间time上。
+
+##### avsync
+* 不同步是常态，同步只是某一个瞬间的偶然态
+* 我们不停的调整视频的 delay，实现一个动态的音视频同步。
+* 最核心的其实跟 Tutorial 里讲的一样：视频太慢了就把delay设置为0，视频太快了就把 delay 乘以2。
+* 另外加入了丢帧机制：当 `time > is->frame_timer + duration` 的时候丢掉视频帧。
+

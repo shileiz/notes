@@ -1448,47 +1448,96 @@ retry:
             Frame *vp, *lastvp;
 
             /* dequeue the picture */
-            lastvp = frame_queue_peek_last(&is->pictq);
-            vp = frame_queue_peek(&is->pictq);
-
-            if (vp->serial != is->videoq.serial) {
-                frame_queue_next(&is->pictq);
-                redisplay = 0;
-                goto retry;
-            }
-
-            if (lastvp->serial != vp->serial && !redisplay)
-                is->frame_timer = av_gettime_relative() / 1000000.0;
-
-            if (is->paused)
-                goto display;
+		/* 
+			zsl
+			lastvp 可能跟 vp 是同一个 pict ，也可能不是同一个，要看 rindex_shown 是否为1 
+			rindex_shown == 1，则lastvp和vp不是同一个pict，lastvp是已经显示过的，vp是尚未显示的
+			rindex_shown == 0，则lastvp和vp是同一个pict，都是尚未显示的
+			除非走到 frame_queue_prev，否则 rindex_shown 一直是1，绝大多数情况 rindex_shown 是1。
+		*/
+		/*zsl frame_queue_peek_last 得到的是读指针指向的pict，可能是显示过的了，也可能是尚未显示的*/
+            lastvp = frame_queue_peek_last(&is->pictq); 
+		/*zsl frame_queue_peek 得到的是尚未显示的那个pict*/
+            vp = frame_queue_peek(&is->pictq); 
 
             /* compute nominal last_duration */
-            last_duration = vp_duration(is, lastvp, vp);
+	     /*
+	     zsl 
+		last_duration 是上次显示的那幅图的duration: vp->pts - lastvp->pts
+		last_duration 的作用是作为当前图像(即将显示的这幅图)的 delay 的初始值
+		如果音视频同步没什么问题，就使用 last_duration 作为当前图像的 delay，否则对 delay 进行调整
+	    */
+            last_duration = vp_duration(is, lastvp, vp); 
             if (redisplay)
                 delay = 0.0;
             else
-                delay = compute_target_delay(last_duration, is);
+		   /*
+		   	zsl 
+		   	delay初始值是last_duration,根据diff调整delay，视频太快就delay乘以2，太慢就delay置0
+		   */
+                delay = compute_target_delay(last_duration, is); 
+
+
 
             time= av_gettime_relative()/1000000.0;
-            if (time < is->frame_timer + delay && !redisplay) {
+
+		
+            /*
+			zsl
+			如果 delay(经过调整后的) 还没到，则先不显示当前帧，函数直接返回，把剩下的时间通过 remaining_time 带出
+			让外面用 av_usleep 等待。等时间到了再进来。
+			能从这个 return 绕过去的，都是 time > is->frame_timer + delay 的，绕过去了就要显示这一帧了。
+			frame_timer: 表示的是某一次显示一个图像时的 time，并从那时开始累加每一次的显示图像前的 delay。
+			一旦 frame_timer 和 time 差的太多了，就把 frame_timer 调整为 time。
+			理论上，frame_timer 应该一直等于 time。
+			因为 frame_timer = 上次显示图片之前得到的time + 上一张图片需要的delay ，
+			而 time 等于当前准备要显示图片之前得到的时间
+			但是整个 ffplay 运行需要一点点时间，比如计算 delay 啥的，还有循环里的其他一些判断，多多少少需要一点时间
+			这样，frame_timer 就渐渐跟 time 拉开了差距。这时候就需要把 frame_timer 更新成当前的 time。		
+		*/
+	     if (time < is->frame_timer + delay && !redisplay) {
                 *remaining_time = FFMIN(is->frame_timer + delay - time, *remaining_time);
                 return;
             }
 
+		 
+		/*
+			zsl
+			当 frame_timer 和 time 差的太多了，就把 frame_timer 调整为 time。
+		*/
             is->frame_timer += delay;
             if (delay > 0 && time - is->frame_timer > AV_SYNC_THRESHOLD_MAX)
                 is->frame_timer = time;
 
-            SDL_LockMutex(is->pictq.mutex);
+
+
+
+	     SDL_LockMutex(is->pictq.mutex);
             if (!redisplay && !isnan(vp->pts))
+		   /*
+		   zsl
+		   把 is->vidclk 更新，使其代表当前即将播放的这幅图的 pts
+		   */
                 update_video_pts(is, vp->pts, vp->pos, vp->serial);
             SDL_UnlockMutex(is->pictq.mutex);
 
-            if (frame_queue_nb_remaining(&is->pictq) > 1) {
+
+
+
+
+	     if (frame_queue_nb_remaining(&is->pictq) > 1) {
                 Frame *nextvp = frame_queue_peek_next(&is->pictq);
                 duration = vp_duration(is, vp, nextvp);
-                if(!is->step && (redisplay || framedrop>0 || (framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)) && time > is->frame_timer + duration){
+		/*
+			zsl
+			判断什么时候该丢帧的逻辑，最主要的是:  time > is->frame_timer + duration
+			这个 duration 是当前即将显示的帧的 duration，即当前帧和下一帧的pts差
+		*/
+		if(!is->step 
+			&& (redisplay || framedrop>0 || 
+			(framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER))
+			&& time > is->frame_timer + duration)
+		{
                     if (!redisplay)
                         is->frame_drops_late++;
 			/*
@@ -1501,26 +1550,6 @@ retry:
                 }
             }
 
-            if (is->subtitle_st) {
-                    while (frame_queue_nb_remaining(&is->subpq) > 0) {
-                        sp = frame_queue_peek(&is->subpq);
-
-                        if (frame_queue_nb_remaining(&is->subpq) > 1)
-                            sp2 = frame_queue_peek_next(&is->subpq);
-                        else
-                            sp2 = NULL;
-
-                        if (sp->serial != is->subtitleq.serial
-                                || (is->vidclk.pts > (sp->pts + ((float) sp->sub.end_display_time / 1000)))
-                                || (sp2 && is->vidclk.pts > (sp2->pts + ((float) sp2->sub.start_display_time / 1000))))
-                        {
-                            frame_queue_next(&is->subpq);
-                        } else {
-                            break;
-                        }
-                    }
-            }
-
 display:
             /* display picture */
             if (!display_disable && is->show_mode == SHOW_MODE_VIDEO)
@@ -1530,6 +1559,9 @@ display:
       		每显示一张图之后，移动读指针
       		(注意，可能不是真正的移动，只是把 rindex_shown 置为1，
       		也可能是真的移动，如果当前 rindex_shown 已经是1)
+      		正常情况下(大多数情况)，rindex_shown 被置1了就不会再清0，除非走到frame_queue_prev
+      		而只有is->force_refresh==1时，才会进入frame_queue_prev。
+      		所以大多数情况下，显示一张图之后，读指针前进一步，rindex_shwon保持为1。
 	  */
             frame_queue_next(&is->pictq);
 
@@ -1538,45 +1570,6 @@ display:
         }
     }
     is->force_refresh = 0;
-    if (show_status) {
-        static int64_t last_time;
-        int64_t cur_time;
-        int aqsize, vqsize, sqsize;
-        double av_diff;
-
-        cur_time = av_gettime_relative();
-        if (!last_time || (cur_time - last_time) >= 30000) {
-            aqsize = 0;
-            vqsize = 0;
-            sqsize = 0;
-            if (is->audio_st)
-                aqsize = is->audioq.size;
-            if (is->video_st)
-                vqsize = is->videoq.size;
-            if (is->subtitle_st)
-                sqsize = is->subtitleq.size;
-            av_diff = 0;
-            if (is->audio_st && is->video_st)
-                av_diff = get_clock(&is->audclk) - get_clock(&is->vidclk);
-            else if (is->video_st)
-                av_diff = get_master_clock(is) - get_clock(&is->vidclk);
-            else if (is->audio_st)
-                av_diff = get_master_clock(is) - get_clock(&is->audclk);
-            av_log(NULL, AV_LOG_INFO,
-                   "%7.2f %s:%7.3f fd=%4d aq=%5dKB vq=%5dKB sq=%5dB f=%"PRId64"/%"PRId64"   \r",
-                   get_master_clock(is),
-                   (is->audio_st && is->video_st) ? "A-V" : (is->video_st ? "M-V" : (is->audio_st ? "M-A" : "   ")),
-                   av_diff,
-                   is->frame_drops_early + is->frame_drops_late,
-                   aqsize / 1024,
-                   vqsize / 1024,
-                   sqsize,
-                   is->video_st ? is->video_st->codec->pts_correction_num_faulty_dts : 0,
-                   is->video_st ? is->video_st->codec->pts_correction_num_faulty_pts : 0);
-            fflush(stdout);
-            last_time = cur_time;
-        }
-    }
 }
 
 /* allocate a picture (needs to do that in main thread to avoid
