@@ -232,6 +232,7 @@ int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size) {
 			return -1;
 		}
 		/* next packet */
+		printf("zsl£ºaudio_decode_frame---¡·packet_queue_get(&is->audioq, &pkt, 1)\n");
 		if (packet_queue_get(&is->audioq, pkt, 1) < 0) {
 			return -1;
 		}
