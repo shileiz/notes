@@ -6,7 +6,13 @@
 * 然后 main 函数（主线程）就进入了 event_loop , event_loop 其实就是视频的显示线程。后面会单独分析。
 * `read_thread` 线程会先做一些初始化和判断，然后分别对 video/audio/subtitle 调用 `stream_component_open`
 * `stream_component_open` 在做完初始化后，分别为 video/audio/subtitle 启动了各自的线程： `video_thread/audio_thread/subtitle_thread`
-* `read_thread` 打开 video/audio/subtitle 各自的线程后，就进入了自己的主循环： 不停的把 packet 读入 `is->videoq/is->audioqis->subtitleq`
+* `read_thread` 打开 video/audio/subtitle 各自的线程后，就进入了自己的主循环： 不停的把 packet 读入 `is->videoq/is->audioq/is->subtitleq`
+
+### 大块儿总结
+* 算上主线程一共5个线程：`main、read_thread、audio_thread、video_thread、subtitle_thread`
+* main 是 video 的显示线程，从 pictq 里拿出图像，在“适当的”时间显示到屏幕上（或丢弃）。另外该线程还负责相应鼠标键盘等 event。
+* read thread 是读包线程，可以理解为 demux 线程，负责从文件里读出 packet，放入对应的队列里（`is->videoq、is->audioq、is->subtitleq`）
+* video thread 是视频解码线程，从 videoq 里拿出 packet，解成 frame，放入 pictq。
 
 ### video_thread
 
