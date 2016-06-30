@@ -1,6 +1,12 @@
 ### 说明
 * 分析的 ffplay.c 的版本是 ffmpeg-release-2.8 源码里带的，从 [git](https://github.com/FFmpeg/FFmpeg/tree/release/2.8) 上下载的。
 
+### 大块儿
+* main 进来先做了一些初始化和判断，然后进入 `stream_open`, `stream_open` 函数会开一个线程：`read_thread`
+* 然后 main 函数（主线程）就进入了 event_loop , event_loop 其实就是视频的显示线程。后面会单独分析。
+* `read_thread` 线程会先做一些初始化和判断，然后分别对 video/audio/subtitle 调用 `stream_component_open`
+* `stream_component_open` 在做完初始化后，分别为 video/audio/subtitle 启动了各自的线程： `video_thread/audio_thread/subtitle_thread`
+* `read_thread` 打开 video/audio/subtitle 各自的线程后，就进入了自己的主循环： 不停的把 packet 读入 `is->videoq/is->audioqis->subtitleq`
 
 ### video_thread
 
@@ -108,7 +114,7 @@
 * `av_gettime` 获取的时间是从1970年1月1日0点0分开始的。也是以微妙为单位。
 * 其实在 ffplay 里使用这两个函数哪个都行，反正是用来计算相对值的，只要能体现出两次到达同一个代码点流逝的时间就可以了。
 
-### 主循环
+### 主循环：`event_loop`
 * main 函数的最后进入 `event_loop(is)`, 这是个死循环永不返回
 * 把 `event_loop` 稍作展开是这样子的：
 
