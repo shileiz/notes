@@ -45,6 +45,8 @@ void packet_queue_init(PacketQueue *q) {
 	q->mutex = SDL_CreateMutex();
 	q->cond = SDL_CreateCond();
 }
+
+/* 会在堆空间上开辟一个新的 pkt，把传进来的pkt拷给它*/
 int packet_queue_put(PacketQueue *q, AVPacket *pkt) {
 
 	AVPacketList *pkt1;
@@ -431,8 +433,11 @@ int video_refresh(void *param) {
 	return 0;
 }
 
+
 int read_packet_thread(void *param) {
 	VideoState *is = (VideoState*)param;
+	/*不用担心这个临时变量每次被覆盖导致pkt队列里的pkt被冲掉，因为packet_queue_put的时候会在堆上分配一个
+	packet，然后把这个packt拷贝给堆上分配的那个，然后把堆上那个入队*/
 	AVPacket packet;
 	while (av_read_frame(is->pFormatCtx, &packet) >= 0) {
 		// Is this a packet from the video stream?
