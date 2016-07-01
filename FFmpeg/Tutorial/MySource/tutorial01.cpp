@@ -69,7 +69,6 @@ int main(int argc, char *argv[]) {
 					windex += width / 2;
 				}
 				fwrite(buffer, 1, height * width * 3 / 2, yuv_file);
-				
 			}
 		}
 		av_free_packet(&packet);

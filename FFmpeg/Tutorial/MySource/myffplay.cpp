@@ -341,7 +341,11 @@ int decode_video_thread(void *param) {
 		packet_queue_get(&is->videoq, &packet, 1);
 		avcodec_decode_video2(is->video_ctx, pFrame, &frameFinished, &packet);
 		
-		/* 因为 ffplay 里自己封装了一个 Frame，所以它这里直接用了 fram->pts，而我们要样 best effort timestamp */
+		/* 
+		   因为 ffplay 里在解码是时候，把frame->pts赋值为了av_frame_get_best_effort_timestamp(frame)，
+		   所以它这里直接用了 fram->pts。
+		   但我们解码时没有做这个动作，所以这里用 av_frame_get_best_effort_timestamp
+		 */
 		pts = (av_frame_get_best_effort_timestamp(pFrame) == AV_NOPTS_VALUE) ? NAN : av_frame_get_best_effort_timestamp(pFrame) * av_q2d(tb);
 		duration = (frame_rate.num && frame_rate.den ? av_q2d(av_inv_q(frame_rate)) : 0);
 		if (frameFinished) {
