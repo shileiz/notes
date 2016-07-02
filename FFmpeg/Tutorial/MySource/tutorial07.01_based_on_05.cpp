@@ -1,11 +1,11 @@
 /*
 
-tutorial05.cpp：
-基于原版 tutorial05.c 做的修改，首先把从01到04以来的修改都用上，以便让代码可以运行。
-另外，极大的简化了音视频同步的过程，目的是阐述清楚基本原理。
+tutorial07.01:
+07没有直接拿 tutorial07.c 修改，因为需要改的地方比较多了，而且之前都改过了。
+所以直接基于修改过的 tutorial05.cpp 来做。
+在 tutorial05.cpp 的基础上，加入seek
 
 */
-
 
 extern "C"
 {
@@ -36,7 +36,7 @@ extern "C"
 #define MAX_AUDIO_FRAME_SIZE 192000
 
 #define MAX_AUDIOQ_SIZE (5 * 16 * 1024)
-#define MAX_VIDEOQ_SIZE (5 * 256 * 1024)
+#define MAX_VIDEOQ_SIZE (5 * 1024 * 1024)
 
 #define AV_SYNC_THRESHOLD 0.01
 #define AV_NOSYNC_THRESHOLD 10.0
@@ -66,6 +66,10 @@ typedef struct VideoState {
 
 	AVFormatContext *pFormatCtx;
 	int             videoStream, audioStream;
+
+	int             seek_req;
+	int             seek_flags;
+	int64_t         seek_pos;
 
 	double          audio_clock;
 	AVStream        *audio_st;
@@ -104,12 +108,11 @@ typedef struct VideoState {
 
 SDL_Surface     *screen;
 SDL_mutex       *screen_mutex;
-int count_pict=0, count_delay_is_zero=0;
-
 
 /* Since we only have one decoding thread, the Big Struct
 can be global in case we need it. */
 VideoState *global_video_state;
+AVPacket flush_pkt;
 
 void packet_queue_init(PacketQueue *q) {
 	memset(q, 0, sizeof(PacketQueue));
@@ -119,7 +122,7 @@ void packet_queue_init(PacketQueue *q) {
 int packet_queue_put(PacketQueue *q, AVPacket *pkt) {
 
 	AVPacketList *pkt1;
-	if (av_dup_packet(pkt) < 0) {
+	if (pkt != &flush_pkt && av_dup_packet(pkt) < 0) {
 		return -1;
 	}
 	pkt1 = (AVPacketList*)av_malloc(sizeof(AVPacketList));
@@ -178,6 +181,23 @@ static int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
 	}
 	SDL_UnlockMutex(q->mutex);
 	return ret;
+}
+
+
+static void packet_queue_flush(PacketQueue *q) {
+	AVPacketList *pkt, *pkt1;
+
+	SDL_LockMutex(q->mutex);
+	for (pkt = q->first_pkt; pkt != NULL; pkt = pkt1) {
+		pkt1 = pkt->next;
+		av_free_packet(&pkt->pkt);
+		av_freep(&pkt);
+	}
+	q->last_pkt = NULL;
+	q->first_pkt = NULL;
+	q->nb_packets = 0;
+	q->size = 0;
+	SDL_UnlockMutex(q->mutex);
 }
 
 double get_audio_clock(VideoState *is) {
@@ -270,6 +290,10 @@ int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size) {
 		/* next packet */
 		if (packet_queue_get(&is->audioq, pkt, 1) < 0) {
 			return -1;
+		}
+		if (pkt->data == flush_pkt.data) {
+			avcodec_flush_buffers(is->audio_ctx);
+			continue;
 		}
 		is->audio_pkt_data = pkt->data;
 		is->audio_pkt_size = pkt->size;
@@ -405,11 +429,8 @@ void video_refresh_timer(void *userdata) {
 
 
 			if (delay == 0) {
-				count_delay_is_zero++;
 				delay = 0.010;
 			}
-			count_pict++;
-			printf("delay==0 percentage is %lf",(double)count_delay_is_zero/count_pict);
 			schedule_refresh(is, (int)(delay * 1000 + 0.5));
 
 			/* show the picture! */
@@ -553,8 +574,11 @@ int video_thread(void *arg) {
 
 	for (;;) {
 		if (packet_queue_get(&is->videoq, packet, 1) < 0) {
-			// means we quit getting packets
 			break;
+		}
+		if (packet->data == flush_pkt.data) {
+			avcodec_flush_buffers(is->video_ctx);
+			continue;
 		}
 		pts = 0;
 
@@ -723,6 +747,38 @@ int decode_thread(void *arg) {
 			break;
 		}
 		// seek stuff goes here
+		if (is->seek_req) {
+			int stream_index = -1;
+			int64_t seek_target = is->seek_pos;
+
+			if (is->videoStream >= 0) stream_index = is->videoStream;
+			else if (is->audioStream >= 0) stream_index = is->audioStream;
+
+			if (stream_index >= 0) {
+				AVRational tb1 = {1,AV_TIME_BASE};
+				seek_target = av_rescale_q(seek_target, tb1,
+					pFormatCtx->streams[stream_index]->time_base);
+			}
+			if (av_seek_frame(is->pFormatCtx, stream_index,
+				seek_target, is->seek_flags) < 0) {
+				fprintf(stderr, "%s: error while seeking\n",
+					is->pFormatCtx->filename);
+			}
+			else {
+
+				if (is->audioStream >= 0) {
+					packet_queue_flush(&is->audioq);
+					packet_queue_put(&is->audioq, &flush_pkt);
+				}
+				if (is->videoStream >= 0) {
+					packet_queue_flush(&is->videoq);
+					packet_queue_put(&is->videoq, &flush_pkt);
+				}
+			}
+			is->seek_req = 0;
+		}
+
+
 		if (is->audioq.size > MAX_AUDIOQ_SIZE ||
 			is->videoq.size > MAX_VIDEOQ_SIZE) {
 			SDL_Delay(10);
@@ -762,6 +818,17 @@ fail:
 	}
 	return 0;
 }
+
+
+void stream_seek(VideoState *is, int64_t pos, int rel) {
+
+	if (!is->seek_req) {
+		is->seek_pos = pos;
+		is->seek_flags = rel < 0 ? AVSEEK_FLAG_BACKWARD : 0;
+		is->seek_req = 1;
+	}
+}
+
 
 int main(int argc, char *argv[]) {
 
@@ -808,13 +875,49 @@ int main(int argc, char *argv[]) {
 		av_free(is);
 		return -1;
 	}
-	for (;;) {
 
+	av_init_packet(&flush_pkt);
+	flush_pkt.data = (uint8_t*)"FLUSH";
+
+	for (;;) {
+		double incr, pos;
 		SDL_WaitEvent(&event);
 		switch (event.type) {
+		case SDL_KEYDOWN:
+			switch (event.key.keysym.sym) {
+			case SDLK_LEFT:
+				incr = -10.0;
+				goto do_seek;
+			case SDLK_RIGHT:
+				incr = 10.0;
+				goto do_seek;
+			case SDLK_UP:
+				incr = 60.0;
+				goto do_seek;
+			case SDLK_DOWN:
+				incr = -60.0;
+				goto do_seek;
+			do_seek:
+				if (global_video_state) {
+					pos = get_audio_clock(global_video_state);
+					pos += incr;
+					stream_seek(global_video_state, (int64_t)(pos * AV_TIME_BASE), incr);
+				}
+				break;
+			default:
+				break;
+			}
+			break;
 		case FF_QUIT_EVENT:
 		case SDL_QUIT:
 			is->quit = 1;
+			/*
+			* If the video has finished playing, then both the picture and
+			* audio queues are waiting for more data.  Make them stop
+			* waiting and terminate normally.
+			*/
+			SDL_CondSignal(is->audioq.cond);
+			SDL_CondSignal(is->videoq.cond);
 			SDL_Quit();
 			return 0;
 			break;

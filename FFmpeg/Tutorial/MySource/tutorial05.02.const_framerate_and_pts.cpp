@@ -1,24 +1,11 @@
-// tutorial04.c
-// A pedagogical video player that will stream through every video frame as fast as it can,
-// and play audio (out of sync).
-//
-// Code based on FFplay, Copyright (c) 2003 Fabrice Bellard, 
-// and a tutorial by Martin Bohme (boehme@inb.uni-luebeckREMOVETHIS.de)
-// Tested on Gentoo, CVS version 5/01/07 compiled with GCC 4.1.1
-// With updates from https://github.com/chelyaev/ffmpeg-tutorial
-// Updates tested on:
-// LAVC 54.59.100, LAVF 54.29.104, LSWS 2.1.101, SDL 1.2.15
-// on GCC 4.7.2 in Debian February 2015
-// Use
-//
-// gcc -o tutorial04 tutorial04.c -lavformat -lavcodec -lswscale -lz -lm `sdl-config --cflags --libs`
-// to build (assuming libavformat and libavcodec are correctly installed, 
-// and assuming you have sdl-config. Please refer to SDL docs for your installation.)
-//
-// Run using
-// tutorial04 myvideofile.mpg
-//
-// to play the video stream on your screen.
+/*
+
+tutorial05.02 主要作用是：
+对比以固定帧率播放视频和按照pts播放视频。
+两种方式均不做音视频同步。
+音频按照自己的 sample rate 播放。
+
+*/
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -323,8 +310,8 @@ void video_refresh_timer(void *userdata) {
 			vp = &is->pictq[is->pictq_rindex];
 			delay_calc_by_pts = vp->pts - is->last_frame_pts;
 			AVRational frame_rate_guess = av_guess_frame_rate(is->pFormatCtx, is->video_st, NULL);
-			AVRational frame_rate_CodecCtx = is->video_ctx->framerate;
-			AVRational frame_rate_Stream = is->video_st->r_frame_rate;
+			//AVRational frame_rate_CodecCtx = is->video_ctx->framerate;
+			//AVRational frame_rate_Stream = is->video_st->r_frame_rate;
 			delay_calc_by_framerate = av_q2d(av_inv_q(frame_rate_guess));
 			printf("delay_calc_by_pts      : %lf\n", delay_calc_by_pts);
 			printf("delay_calc_by_framerate: %lf\n", delay_calc_by_framerate);

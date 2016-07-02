@@ -1,25 +1,12 @@
-// tutorial03.c
-// A pedagogical video player that will stream through every video frame as fast as it can
-// and play audio (out of sync).
-//
-// Code based on FFplay, Copyright (c) 2003 Fabrice Bellard, 
-// and a tutorial by Martin Bohme (boehme@inb.uni-luebeckREMOVETHIS.de)
-// Tested on Gentoo, CVS version 5/01/07 compiled with GCC 4.1.1
-// With updates from https://github.com/chelyaev/ffmpeg-tutorial
-// Updates tested on:
-// LAVC 54.59.100, LAVF 54.29.104, LSWS 2.1.101, SDL 1.2.15
-// on GCC 4.7.2 in Debian February 2015
-//
-// Use
-//
-// gcc -o tutorial03 tutorial03.c -lavformat -lavcodec -lswscale -lz -lm `sdl-config --cflags --libs`
-// to build (assuming libavformat and libavcodec are correctly installed, 
-// and assuming you have sdl-config. Please refer to SDL docs for your installation.)
-//
-// Run using
-// tutorial03 myvideofile.mpg
-//
-// to play the stream on your screen.
+/*
+
+tutorial03.02 的主要目的：
+在可以正常播放音频之后，把读包用单独的线程单独去做。
+在主线程里收消息，收到刷新视频的消息时，拿出一个视频包，解码，显示，然后。
+即视频的显示是在主线程里完成的。
+刷新视频的消息固定以40ms一次发送：send_refresh_video_event()
+
+*/
 
 extern "C" {
 #include <libavcodec/avcodec.h>
