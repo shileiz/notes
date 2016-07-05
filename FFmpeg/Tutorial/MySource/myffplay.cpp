@@ -380,6 +380,13 @@ int video_refresh(void *param) {
 	double last_duration, duration, delay, ref_clock, diff;
 	VideoPicture *vp, *lastvp;
 
+	// ---- debug -----
+	double  *buffer = NULL;
+	buffer = (double *)malloc(3 * 2048 * sizeof(double));
+	memset(buffer, 0.0, 3 * 2048 * sizeof(double));
+	int count = 0, index = 0;
+	FILE *diff_file = fopen("diff.csv","w");
+
 	for (;;)
 	{
 		/*lastvp：刚刚显示过的那个pict*/
@@ -407,6 +414,21 @@ int video_refresh(void *param) {
 		delay = last_duration;
 		ref_clock = get_audio_clock(is);
 		diff = vp->pts - ref_clock;
+		
+		// ---- debug -----
+		count++;
+		memcpy(buffer+index, &ref_clock, sizeof(double));
+		memcpy(buffer+index+1, &vp->pts, sizeof(double));
+		memcpy(buffer+index+2, &diff, sizeof(double));
+		index+=3;
+		if (count > 1200) {
+			for (int i=0; i < count-10;i+=3) {
+				fprintf(diff_file,"%lf,%lf,%lf\n",buffer[i],buffer[i+1],buffer[i+2]);
+			}
+			exit(0);
+		}
+			
+
 		if (diff <= -0.015) {
 			delay = 0;
 		}
@@ -414,16 +436,12 @@ int video_refresh(void *param) {
 			delay = 2 * delay;
 		}
 
-		if (delay == 0) 
-			delay = 0.010;
+		//if (delay == 0) 
+		//	delay = 0.010;
 
 		/* ----------- */
 
-		// TODO: 判断是否需要丢帧，需要引入 time 变量
-
-
-		// 起一个一次性 timer，到时间后发个 event，显示当前pict
-		//SDL_AddTimer((int)(delay * 1000 + 0.5),send_refresh_video_event,is);
+		// delay 之后显示当前图片
 		av_usleep((int64_t)(delay* 1000000.0));
 		SDL_Event event;
 		event.type = SDL_USEREVENT;

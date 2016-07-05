@@ -419,7 +419,20 @@ void video_refresh_timer(void *userdata) {
 			/*ÒôÊÓÆµÍ¬²½*/
 			ref_clock = get_audio_clock(is);
 			diff = vp->pts - ref_clock;
-			if (diff <= -0.015) {
+			if (diff <= -0.5) {
+				// ¶ªÖ¡
+				printf("¶ªÖ¡\n");
+				/* update queue for next picture! */
+				if (++is->pictq_rindex == VIDEO_PICTURE_QUEUE_SIZE) {
+					is->pictq_rindex = 0;
+				}
+				SDL_LockMutex(is->pictq_mutex);
+				is->pictq_size--;
+				SDL_CondSignal(is->pictq_cond);
+				SDL_UnlockMutex(is->pictq_mutex);
+				schedule_refresh(is, 1);
+			}
+			else if (diff <= -0.015) {
 				delay = 0;
 			}
 			else if (diff >= 0.015) {
@@ -428,9 +441,9 @@ void video_refresh_timer(void *userdata) {
 			/* ----------- */
 
 
-			if (delay == 0) {
-				delay = 0.010;
-			}
+			//if (delay == 0) {
+			//	delay = 0.010;
+			//}
 			schedule_refresh(is, (int)(delay * 1000 + 0.5));
 
 			/* show the picture! */
