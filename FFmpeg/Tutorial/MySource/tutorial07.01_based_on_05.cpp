@@ -46,6 +46,13 @@ extern "C"
 
 #define VIDEO_PICTURE_QUEUE_SIZE 1
 
+
+// ---- debug -----
+double cu_time;
+double  *buffer = NULL;
+static int count = 0, index = 0;
+static FILE *diff_file = fopen("diff.csv", "w");
+
 typedef struct PacketQueue {
 	AVPacketList *first_pkt, *last_pkt;
 	int nb_packets;
@@ -298,10 +305,12 @@ int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size) {
 		is->audio_pkt_data = pkt->data;
 		is->audio_pkt_size = pkt->size;
 		/* if update, update the audio clock w/pts */
+
+
 		// audio_clock 就是当前 pkt 的 pts，当当前 pkt 解码完了之后，再加上解码出来的数据能持续的时间。
-		if (pkt->pts != AV_NOPTS_VALUE) {
-			is->audio_clock = av_q2d(is->audio_st->time_base)*pkt->pts;
-		}
+		//if (pkt->pts != AV_NOPTS_VALUE) {
+		//	is->audio_clock = av_q2d(is->audio_st->time_base)*pkt->pts;
+		//}
 	}
 }
 
@@ -347,6 +356,12 @@ static Uint32 sdl_refresh_timer_cb(Uint32 interval, void *opaque) {
 }
 
 /* schedule a video refresh in 'delay' ms */
+/*
+不要用 SDL Timer 了：
+1. 比如你定了一个 40 毫秒的 timer，可能10毫秒甚至1毫秒就到时间了
+2. ffplay（ffmpeg2.8） 已经不用 SDL timer 了，使用 av_usleep() 代替。
+TODO，替换掉
+*/
 static void schedule_refresh(VideoState *is, int delay) {
 	SDL_AddTimer(delay, sdl_refresh_timer_cb, is);
 }
@@ -404,6 +419,7 @@ void video_refresh_timer(void *userdata) {
 	VideoPicture *vp;
 	double actual_delay, delay, sync_threshold, ref_clock, diff;
 
+
 	if (is->video_st) {
 		if (is->pictq_size == 0) {
 			schedule_refresh(is, 1);
@@ -419,32 +435,57 @@ void video_refresh_timer(void *userdata) {
 			/*音视频同步*/
 			ref_clock = get_audio_clock(is);
 			diff = vp->pts - ref_clock;
-			if (diff <= -0.5) {
-				// 丢帧
-				printf("丢帧\n");
-				/* update queue for next picture! */
-				if (++is->pictq_rindex == VIDEO_PICTURE_QUEUE_SIZE) {
-					is->pictq_rindex = 0;
-				}
-				SDL_LockMutex(is->pictq_mutex);
-				is->pictq_size--;
-				SDL_CondSignal(is->pictq_cond);
-				SDL_UnlockMutex(is->pictq_mutex);
-				schedule_refresh(is, 1);
-			}
-			else if (diff <= -0.015) {
+			//if (diff <= -0.5) {
+			//	// 丢帧
+			//	printf("丢帧\n");
+			//	/* update queue for next picture! */
+			//	if (++is->pictq_rindex == VIDEO_PICTURE_QUEUE_SIZE) {
+			//		is->pictq_rindex = 0;
+			//	}
+			//	SDL_LockMutex(is->pictq_mutex);
+			//	if (is->pictq_size == 0) {
+			//		SDL_CondWait(is->pictq_cond, is->pictq_mutex);
+			//	}
+			//	is->pictq_size--;
+			//	SDL_CondSignal(is->pictq_cond);
+			//	SDL_UnlockMutex(is->pictq_mutex);
+			//	schedule_refresh(is, 1);
+			//}
+			if (diff <= -0.015) {
 				delay = 0;
 			}
 			else if (diff >= 0.015) {
 				delay = 2 * delay;
 			}
+
+			actual_delay = (int)(delay * 1000 + 0.5);
+
 			/* ----------- */
 
 
 			//if (delay == 0) {
 			//	delay = 0.010;
 			//}
-			schedule_refresh(is, (int)(delay * 1000 + 0.5));
+
+
+			// ---- debug -----
+			cu_time = (double)av_gettime();
+			count++;
+			memcpy(buffer + index, &ref_clock, sizeof(double));
+			memcpy(buffer + index + 1, &vp->pts, sizeof(double));
+			memcpy(buffer + index + 2, &diff, sizeof(double));
+			memcpy(buffer + index + 3, &cu_time, sizeof(double));
+			memcpy(buffer + index + 4, &delay, sizeof(double));
+			memcpy(buffer + index + 5, &actual_delay, sizeof(double));
+			index += 6;
+			if (count > 120) {
+				for (int i = 0; i < count * 6 - 10; i += 6) {
+					fprintf(diff_file, "%lf,%lf,%lf,%lf,%lf,%lf\n", buffer[i], buffer[i + 1], buffer[i + 2], buffer[i + 3], buffer[i + 4], buffer[i + 5]);
+				}
+				exit(0);
+			}
+
+			schedule_refresh(is, actual_delay);
 
 			/* show the picture! */
 			video_display(is);
@@ -454,6 +495,9 @@ void video_refresh_timer(void *userdata) {
 				is->pictq_rindex = 0;
 			}
 			SDL_LockMutex(is->pictq_mutex);
+			if (is->pictq_size == 0) {
+				SDL_CondWait(is->pictq_cond,is->pictq_mutex);
+			}
 			is->pictq_size--;
 			SDL_CondSignal(is->pictq_cond);
 			SDL_UnlockMutex(is->pictq_mutex);
@@ -550,7 +594,11 @@ int queue_picture(VideoState *is, AVFrame *pFrame, double pts) {
 			is->pictq_windex = 0;
 		}
 		SDL_LockMutex(is->pictq_mutex);
+		if (is->pictq_size == VIDEO_PICTURE_QUEUE_SIZE) {
+			SDL_CondWait(is->pictq_cond,is->pictq_mutex);
+		}
 		is->pictq_size++;
+		SDL_CondSignal(is->pictq_cond);
 		SDL_UnlockMutex(is->pictq_mutex);
 	}
 	return 0;
@@ -726,7 +774,7 @@ int decode_thread(void *arg) {
 	if (avformat_find_stream_info(pFormatCtx, NULL)<0)
 		return -1; // Couldn't find stream information
 
-				   // Dump information about file onto standard error
+	// Dump information about file onto standard error
 	av_dump_format(pFormatCtx, 0, is->filename, 0);
 
 	// Find the first video stream
@@ -848,6 +896,10 @@ int main(int argc, char *argv[]) {
 	SDL_Event       event;
 
 	VideoState      *is;
+
+	// ------- debug
+	buffer = (double *)malloc(5 * 2048 * sizeof(double));
+	memset(buffer, 0.0, 5 * 2048 * sizeof(double));
 
 	is = (VideoState*)av_mallocz(sizeof(VideoState));
 

@@ -152,6 +152,9 @@ static void pict_queue_push(PictureQueue *f)
 	if (++f->windex == f->max_size)
 		f->windex = 0;
 	SDL_LockMutex(f->mutex);
+	if (f->size == f->max_size) {
+		SDL_CondWait(f->cond,f->mutex);
+	}
 	f->size++;
 	SDL_CondSignal(f->cond);
 	SDL_UnlockMutex(f->mutex);
@@ -165,6 +168,9 @@ static void pict_queue_next(PictureQueue *f)
 	if (++f->rindex == f->max_size)
 		f->rindex = 0;
 	SDL_LockMutex(f->mutex);
+	if (f->size == 0) {
+		SDL_CondWait(f->cond, f->mutex);
+	}
 	f->size--;
 	SDL_CondSignal(f->cond);
 	SDL_UnlockMutex(f->mutex);
@@ -380,12 +386,12 @@ int video_refresh(void *param) {
 	double last_duration, duration, delay, ref_clock, diff;
 	VideoPicture *vp, *lastvp;
 
-	// ---- debug -----
-	double  *buffer = NULL;
-	buffer = (double *)malloc(3 * 2048 * sizeof(double));
-	memset(buffer, 0.0, 3 * 2048 * sizeof(double));
-	int count = 0, index = 0;
-	FILE *diff_file = fopen("diff.csv","w");
+	//// ---- debug -----
+	//double  *buffer = NULL;
+	//buffer = (double *)malloc(3 * 2048 * sizeof(double));
+	//memset(buffer, 0.0, 3 * 2048 * sizeof(double));
+	//int count = 0, index = 0;
+	//FILE *diff_file = fopen("diff.csv","w");
 
 	for (;;)
 	{
@@ -415,18 +421,18 @@ int video_refresh(void *param) {
 		ref_clock = get_audio_clock(is);
 		diff = vp->pts - ref_clock;
 		
-		// ---- debug -----
-		count++;
-		memcpy(buffer+index, &ref_clock, sizeof(double));
-		memcpy(buffer+index+1, &vp->pts, sizeof(double));
-		memcpy(buffer+index+2, &diff, sizeof(double));
-		index+=3;
-		if (count > 1200) {
-			for (int i=0; i < count-10;i+=3) {
-				fprintf(diff_file,"%lf,%lf,%lf\n",buffer[i],buffer[i+1],buffer[i+2]);
-			}
-			exit(0);
-		}
+		//// ---- debug -----
+		//count++;
+		//memcpy(buffer+index, &ref_clock, sizeof(double));
+		//memcpy(buffer+index+1, &vp->pts, sizeof(double));
+		//memcpy(buffer+index+2, &diff, sizeof(double));
+		//index+=3;
+		//if (count > 1200) {
+		//	for (int i=0; i < count-10;i+=3) {
+		//		fprintf(diff_file,"%lf,%lf,%lf\n",buffer[i],buffer[i+1],buffer[i+2]);
+		//	}
+		//	exit(0);
+		//}
 			
 
 		if (diff <= -0.015) {

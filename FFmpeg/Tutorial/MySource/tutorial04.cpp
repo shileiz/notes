@@ -275,6 +275,12 @@ static Uint32 sdl_refresh_timer_cb(Uint32 interval, void *opaque) {
 }
 
 /* schedule a video refresh in 'delay' ms */
+/*
+	不要用 SDL Timer 了：
+	1. 比如你定了一个 40 毫秒的 timer，可能10毫秒甚至1毫秒就到时间了
+	2. ffplay（ffmpeg2.8） 已经不用 SDL timer 了，使用 av_usleep() 代替。
+	TODO，替换掉
+*/
 static void schedule_refresh(VideoState *is, int delay) {
 	SDL_AddTimer(delay, sdl_refresh_timer_cb, is);
 }
