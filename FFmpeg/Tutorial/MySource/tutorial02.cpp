@@ -2,6 +2,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
+#include <libavutil/time.h>
 }
 #include <sdl/SDL.h>
 
@@ -54,15 +55,19 @@ int main(int argc, char *argv[]) {
 
 	sws_ctx = sws_getContext(pCodecCtx->width,
 		pCodecCtx->height,
-		pCodecCtx->pix_fmt,
+		pCodecCtx->pix_fmt,  // yuv420p,或者别的 yuv422，rgb23
 		pCodecCtx->width,
 		pCodecCtx->height,
-		PIX_FMT_YUV420P,
+		PIX_FMT_YUV420P,   // yuv420p
 		SWS_BILINEAR,
 		NULL,
 		NULL,
 		NULL
 	);
+
+	AVRational frame_rate = av_guess_frame_rate(pFormatCtx, 
+		pFormatCtx->streams[videoStream],NULL);
+	double duration_per_frame = av_q2d(av_inv_q(frame_rate));
 
 	while (av_read_frame(pFormatCtx, &packet) >= 0) {
 		if (packet.stream_index == videoStream) {
@@ -83,6 +88,7 @@ int main(int argc, char *argv[]) {
 				rect.y = 0;
 				rect.w = pCodecCtx->width;
 				rect.h = pCodecCtx->height;
+				av_usleep((int64_t)(duration_per_frame * 1000000.0));
 				SDL_DisplayYUVOverlay(bmp, &rect);
 
 			}
