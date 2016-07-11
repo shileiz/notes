@@ -10,8 +10,6 @@ extern "C" {
 
 #undef main /* Prevents SDL from overriding main() */
 
-#define MAX_AUDIO_FRAME_SIZE 192000
-
 typedef struct PacketQueue {
 	AVPacketList *first_pkt, *last_pkt;
 	int nb_packets;
@@ -25,6 +23,7 @@ void packet_queue_init(PacketQueue *q) {
 	q->mutex = SDL_CreateMutex();
 	q->cond = SDL_CreateCond();
 }
+
 int packet_queue_put(PacketQueue *q, AVPacket *pkt) {
 
 	AVPacketList *pkt1;
@@ -84,9 +83,6 @@ static int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
 	return ret;
 }
 
-void audio_callback(void *userdata, Uint8 *stream, int len);
-int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf, int buf_size);
-
 // 暂且使用全局变量
 PacketQueue		audioq;
 SwrContext      *swr_ctx;
@@ -107,7 +103,7 @@ int main(int argc, char *argv[]) {
 
 	av_register_all();
 
-	SDL_Init(SDL_INIT_AUDIO );
+	SDL_Init(SDL_INIT_AUDIO);
 
 	avformat_open_input(&pFormatCtx, argv[1], NULL, NULL);
 	avformat_find_stream_info(pFormatCtx, NULL);
