@@ -10,7 +10,6 @@ extern "C" {
 
 #undef main /* Prevents SDL from overriding main() */
 
-#define SDL_AUDIO_BUFFER_SIZE 1024
 #define MAX_AUDIO_FRAME_SIZE 192000
 
 typedef struct PacketQueue {
@@ -91,7 +90,7 @@ int audio_decode_frame(AVCodecContext *aCodecCtx, uint8_t *audio_buf, int buf_si
 // 暂且使用全局变量
 PacketQueue		audioq;
 SwrContext      *swr_ctx;
-uint8_t			*audio_buf;
+uint8_t			audio_buf[1024*1024];
 unsigned int	audio_buf_read_index = 0;
 unsigned int	audio_buf_size = 0;
 
@@ -104,7 +103,6 @@ int main(int argc, char *argv[]) {
 	AVCodec         *aCodec = NULL;
 	SDL_AudioSpec   wanted_spec, spec;
 	
-	audio_buf = (uint8_t*)av_malloc(1024*1024);
 	memset(audio_buf,0,sizeof(audio_buf));
 
 	av_register_all();
@@ -128,7 +126,7 @@ int main(int argc, char *argv[]) {
 	wanted_spec.freq = aCodecCtx->sample_rate;
 	wanted_spec.format = AUDIO_S16SYS;
 	wanted_spec.channels = aCodecCtx->channels;
-	wanted_spec.samples = SDL_AUDIO_BUFFER_SIZE;
+	wanted_spec.samples = 1024;
 	wanted_spec.callback = audio_callback;
 	wanted_spec.userdata = aCodecCtx;
 	swr_ctx = swr_alloc_set_opts(NULL,
@@ -205,7 +203,8 @@ void audio_callback(void *userdata, Uint8 *stream, int len) {
 					//准备调用 swr_convert 的其他4个必须参数: out,out_samples_per_ch,in,in_samples_per_ch
 
 					// 因为 AV_SAMPLE_FMT_S16 是 packed 存储的，所以可以直接把 audio_buf 强转成 (uint8_t**)：For packed sample formats, only the first data plane is used
-					uint8_t **out = &audio_buf;
+					uint8_t *tmp = audio_buf;
+					uint8_t **out = &tmp;
 					const uint8_t **in = (const uint8_t **)frame->extended_data;
 
 					int len2 = 0, out_data_size = 0;
