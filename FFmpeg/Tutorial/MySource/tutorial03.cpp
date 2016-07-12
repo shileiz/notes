@@ -198,7 +198,6 @@ void audio_callback(void *userdata, Uint8 *stream, int len) {
 				if (got_frame) {
 					//准备调用 swr_convert 的其他4个必须参数: out,out_samples_per_ch,in,in_samples_per_ch
 
-					// 因为 AV_SAMPLE_FMT_S16 是 packed 存储的，所以可以直接把 audio_buf 强转成 (uint8_t**)：For packed sample formats, only the first data plane is used
 					uint8_t *tmp = audio_buf;
 					uint8_t **out = &tmp;
 					const uint8_t **in = (const uint8_t **)frame->extended_data;
