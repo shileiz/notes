@@ -90,6 +90,8 @@ uint8_t			audio_buf[1024*1024];
 unsigned int	audio_buf_read_index = 0;
 unsigned int	audio_buf_size = 0;
 
+void audio_callback(void *userdata, Uint8 *stream, int len);
+
 
 int main(int argc, char *argv[]) {
 	AVFormatContext *pFormatCtx = NULL;
@@ -205,7 +207,7 @@ void audio_callback(void *userdata, Uint8 *stream, int len) {
 					int len2 = 0, out_data_size = 0;
 					
 					// 调用 swr_convert 进行转换, 万一写多了咋办？
-					len2 = swr_convert(swr_ctx, out, frame->nb_samples, in, frame->nb_samples);
+					len2 = swr_convert(swr_ctx, out, frame->nb_samples, frame->extended_data, frame->nb_samples);
 					if (len2 <= 0)
 						continue;
 					// 计算转换完的 samples 总大小, 这就是给音频设备写入了多少字节的数据
