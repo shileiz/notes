@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<!DOCTYPE CodeBlocks_layout_file>
+<CodeBlocks_layout_file>
+	<File name="CApp.cpp" open="1" top="0">
+		<Cursor position="222" topLine="0"/>
+	</File>
+	<File name="CApp.h" open="1" top="1">
+		<Cursor position="412" topLine="1"/>
+	</File>
+	<File name="CApp_OnCleanup.cpp" open="1" top="0">
+		<Cursor position="242" topLine="0"/>
+	</File>
+	<File name="CApp_OnInit.cpp" open="1" top="0">
+		<Cursor position="429" topLine="0"/>
+	</File>
+	<File name="CApp_OnRender.cpp" open="1" top="0">
+		<Cursor position="328" topLine="0"/>
+	</File>
+	<File name="CSurface.cpp" open="1" top="0">
+		<Cursor position="1035" topLine="24"/>
+	</File>
+	<File name="CSurface.h" open="1" top="0">
+		<Cursor position="726" topLine="0"/>
+	</File>
+	<Expand folder="/Sources"/>
+	<Expand folder="/Headers"/>
+</CodeBlocks_layout_file>

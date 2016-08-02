@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<!DOCTYPE CodeBlocks_project_file>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="1"/>
+	<Project>
+		<Option title="SDL Tutorial 1"/>
+		<Option makefile="Makefile"/>
+		<Option makefile_is_custom="0"/>
+		<Option compiler="0"/>
+		<Build>
+			<Target title="Release">
+				<Option output="bin\SDL Tutorial 1.exe"/>
+				<Option working_dir="bin"/>
+				<Option object_output="obj"/>
+				<Option deps_output="dep"/>
+				<Option type="0"/>
+				<Option compiler="0"/>
+				<Option projectResourceIncludeDirsRelation="0"/>
+				<Compiler>
+					<Add option="-O2"/>
+				</Compiler>
+				<Linker>
+					<Add option="-s"/>
+				</Linker>
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-Wall"/>
+		</Compiler>
+		<Linker>
+			<Add library="mingw32"/>
+			<Add library="SDLmain"/>
+			<Add library="SDL"/>
+		</Linker>
+		<Unit filename="CApp.cpp">
+			<Option compilerVar="CPP"/>
+			<Option target="Release"/>
+		</Unit>
+		<Unit filename="CApp.h">
+			<Option compilerVar="CPP"/>
+		</Unit>
+		<Unit filename="CApp_OnCleanup.cpp">
+			<Option compilerVar="CPP"/>
+			<Option target="Release"/>
+		</Unit>
+		<Unit filename="CApp_OnEvent.cpp">
+			<Option compilerVar="CPP"/>
+			<Option target="Release"/>
+		</Unit>
+		<Unit filename="CApp_OnInit.cpp">
+			<Option compilerVar="CPP"/>
+			<Option target="Release"/>
+		</Unit>
+		<Unit filename="CApp_OnLoop.cpp">
+			<Option compilerVar="CPP"/>
+			<Option target="Release"/>
+		</Unit>
+		<Unit filename="CApp_OnRender.cpp">
+			<Option compilerVar="CPP"/>
+			<Option target="Release"/>
+		</Unit>
+	</Project>
+</CodeBlocks_project_file>

@@ -1,0 +1,24 @@
+﻿生成启动时间为 2016/7/30 14:32:28。
+     1>项目“E:\GitHub\notes\SDL\Tutorial_SDL_Game_Framework_Series\mySource\SDLTutorial\SDLTutorial01\SDLTutorial01.vcxproj”在节点 2 上(Build 个目标)。
+     1>ClCompile:
+         E:\Program Files\Microsoft Visual Studio 2015\VC\bin\CL.exe /c /IE:\GitHub\notes\SDL\Tutorial_SDL_Game_Framework_Series\mySource\SDLTutorial\include /ZI /nologo /W3 /WX- /sdl /Od /Oy- /D WIN32 /D _DEBUG /D _CONSOLE /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /Fo"Debug\\" /Fd"Debug\vc140.pdb" /Gd /TP /analyze- /errorReport:prompt CApp.cpp CApp_OnCleanup.cpp CApp_OnEvent.cpp CApp_OnInit.cpp CApp_OnLoop.cpp CApp_OnRender.cpp
+         CApp_OnRender.cpp
+         CApp_OnLoop.cpp
+         CApp_OnInit.cpp
+         CApp_OnEvent.cpp
+         CApp_OnCleanup.cpp
+         CApp.cpp
+         正在生成代码...
+       Link:
+         E:\Program Files\Microsoft Visual Studio 2015\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"E:\GitHub\notes\SDL\Tutorial_SDL_Game_Framework_Series\mySource\SDLTutorial\Debug\SDLTutorial01.exe" /INCREMENTAL /NOLOGO /LIBPATH:E:\GitHub\notes\SDL\Tutorial_SDL_Game_Framework_Series\mySource\SDLTutorial\lib SDL.lib SDLmain.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /Debug /PDB:"E:\GitHub\notes\SDL\Tutorial_SDL_Game_Framework_Series\mySource\SDLTutorial\Debug\SDLTutorial01.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"E:\GitHub\notes\SDL\Tutorial_SDL_Game_Framework_Series\mySource\SDLTutorial\Debug\SDLTutorial01.lib" /MACHINE:X86 Debug\CApp.obj
+         Debug\CApp_OnCleanup.obj
+         Debug\CApp_OnEvent.obj
+         Debug\CApp_OnInit.obj
+         Debug\CApp_OnLoop.obj
+         Debug\CApp_OnRender.obj
+         SDLTutorial01.vcxproj -> E:\GitHub\notes\SDL\Tutorial_SDL_Game_Framework_Series\mySource\SDLTutorial\Debug\SDLTutorial01.exe
+     1>已完成生成项目“E:\GitHub\notes\SDL\Tutorial_SDL_Game_Framework_Series\mySource\SDLTutorial\SDLTutorial01\SDLTutorial01.vcxproj”(Build 个目标)的操作。
+
+已成功生成。
+
+已用时间 00:00:02.03

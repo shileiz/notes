@@ -1,0 +1,37 @@
+# depslib dependency file v1.0
+1192737011 source:c:\development\tutorials\sdl tutorial 1\capp_oncleanup.cpp
+	"CApp.h"
+
+1192737011 c:\development\tutorials\sdl tutorial 1\capp.h
+	<SDL.h>
+
+1192737010 source:c:\development\tutorials\sdl tutorial 1\capp_onevent.cpp
+	"CApp.h"
+
+1192737011 source:c:\development\tutorials\sdl tutorial 1\capp_oninit.cpp
+	"CApp.h"
+
+1192736982 source:c:\development\tutorials\sdl tutorial 1\capp_onloop.cpp
+	"CApp.h"
+
+1192736982 source:c:\development\tutorials\sdl tutorial 1\capp_onrender.cpp
+	"CApp.h"
+
+1192737011 c:\development\tutorials\sdl tutorial 1\capp_oncleanup.cpp
+	"CApp.h"
+
+1192737010 c:\development\tutorials\sdl tutorial 1\capp_onevent.cpp
+	"CApp.h"
+
+1192737011 c:\development\tutorials\sdl tutorial 1\capp_oninit.cpp
+	"CApp.h"
+
+1192736982 c:\development\tutorials\sdl tutorial 1\capp_onloop.cpp
+	"CApp.h"
+
+1192736982 c:\development\tutorials\sdl tutorial 1\capp_onrender.cpp
+	"CApp.h"
+
+1192737130 c:\development\tutorials\sdl tutorial 1\capp.cpp
+	"CApp.h"
+
