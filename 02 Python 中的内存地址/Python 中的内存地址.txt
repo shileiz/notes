@@ -1,9 +1,41 @@
-1. Python 有个 build-in 的函数，叫 id(),能返回一个对象的内存地址，以十进制的形式。
-以下是 Python 2.7 官方文档里对 id() 的描述，它确实返回的是内存地址。（Python 3.3 文档也看了，描述一样）
-id(object) 
-Return the “identity” of an object. This is an integer (or long integer) which is guaranteed to be unique and constant for this object during its lifetime.
-Two objects with non-overlapping lifetimes may have the same id() value.
-CPython implementation detail: This is the address of the object in memory.
+### 对象的内存地址
+* Python 有个 build-in 的函数，叫 id(),能返回一个对象的内存地址，以十进制的形式。
+* 以下是 Python 2.7 官方文档里对 id() 的描述，它确实返回的是内存地址。（Python 3.3 文档也看了，描述一样）
+
+		id(object) 
+		Return the “identity” of an object. This is an integer (or long integer) which is guaranteed to be unique and constant for this object during its lifetime.
+		Two objects with non-overlapping lifetimes may have the same id() value.
+		CPython implementation detail: This is the address of the object in memory.
+
+### 赋值（assignment）
+* a = 1  这句话。
+* a 是名字（即变量）
+* 1 是对象（你没看错，数字1也是一个对象：整型对象）
+* 赋值操作就是名字和对象的绑定或重绑定。 （Assignments do not copy data — they just bind names to objects.）
+* a = 1 即把名字a和对象1进行了绑定
+* “变量a” 是对 “对象1” 的引用，可以理解为a是一根指针，指向内存里的对象：1
+
+### 别在想着栈空间和堆空间
+* id() 取的是对象的地址，而不是变量的
+* python 里无法得到变量的地址
+* C语言里：`int a=1; int b=a;` 
+	* a 有a的地址，b有b的地址。&a可以取到a的地址，&b可以取到b的地址，&1语法错误。
+	* a 和 b 都在栈空间上
+* python里：`a=1 b=a` 
+	* id(a)==id(b)==id(1)
+	* 变量a和b本身的地址是得不到的，无论id(a)还是id(b)，得到的都是内存中对象1的地址。
+	* 可以理解为没有所谓的栈空间，也没有为a和b都分配一个int大小的内存，a和b都是“名字”，都绑定到了内存中的对象1上。
+	* a分分钟可以被绑定到别的对象上，而且可以是别的类型的对象，比如随时可以 a="hello"
+	* 再次强调，在python里给a赋值，只是给a重新绑定到另一个对象上
+* python里任何变量名都是引用，都指向了python内存中的某个对象。占用内存的是对象，而不是变量。所以画内存图的时候，只画对象所在的内存就行了。
+* Java 里 `Person p = new Person();`，相当于在栈空间上搞了一个引用型（指针）变量p，让它指向堆空间上的Person型对象。
+* C语言里 `struct person *p = malloc(sizeof(struct person));`跟上面同理
+* C++里 `Person *p = new Person();` 跟上面同理
+* python里 `p = Person()` 只是没有了栈空间上的p，p只是个名字，不占用内存（这样理解比较方便，实际上肯定是占用的，只不过python让这部分内容对用户透明了而已）
+* 其实这些都体现不出来啥区别，能体现出区别（容易出问题）的地方是：
+	* 函数调用：传值还是传引用？C/C++ 很容易实现的 swap()，在java和python这种没有指针的语言里，是很难实现的。
+	* a=[] b=a b[0]=100 // 即深浅拷贝
+	* 
 
 2. 正题。
 python 里任何类型的变量都是引用，包括基本型的变量，比如int、float；也包括复杂型的变量，比如list、dict。
