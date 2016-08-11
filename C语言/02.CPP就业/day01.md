@@ -12,6 +12,11 @@
 * cout 和 cin 都是 std 这个 namespace 里的类
 * 如果不使用 using namespace std; 来声明使用了 std 这个 namespace，也可以用 std::cout 这种来使用 cout
 
+##### 定义自己的 namespace
+* 可以定义没有名字的 namespace，里面的函数中外部将不可用
+* static 的函数，只能在文件内部使用
+* 无名 namespace 包起来整个文件也可以起到整个文件的函数只能在文件内有效的效果，很少这么用
+
 #### 更严格的指针类型转换
 * 复习C的类型转换： 00基础\02.  当年之关注了“数字”类型的互相转换
 	* 隐转和强转
@@ -82,3 +87,25 @@
 	* 参考以下帖子：
 	* http://winterttr.me/2015/10/24/python-passing-arguments-as-value-or-reference/
 	* 参考《python 中的内存地址》
+
+#### 类
+* 如果类函数返回的是成员变量的指针，为了避免在类外部成员变量被修改，所以函数就要返回常量指针。
+	
+		class man
+		{
+			public:
+			    char *name;
+			public:
+			    char *get_name() 
+				/* 
+					错误，返回的是 name 的地址，外面可以利用这一点重置 name 的值。
+					正确做法应该是 const char *get_name()
+				*/
+				{
+					return name；
+				} 
+		};
+
+* 不过以上方法（`const char *get_name()`）也避免不了外部修改成员变量，外面可以把 `get_name()` 返回值强转成 char*，然后对其赋值。
+* 老师讲到这儿也懵了，确实能通过强转赋值，老师也没说咋解决。
+* 在类的内部访问全局标识,关键字 `::`
