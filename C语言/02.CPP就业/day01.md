@@ -115,6 +115,18 @@
 * Java 是`Person p = new Person(参数);`
 * Python是 `p = Person(参数)`
 * C++ 里类的成员变量如果不赋值，则其值是随机的。就像C里定义了一个变量却没有赋初值一样。所以一定要在构造函数里给所有的成员变量赋初值。或者在定义类的时候写上初值。
+* C++ 实例化的对象是分配在栈空间的，new 出来的对象才是在堆上。
+	* `Person p(10,"xiaozhang");` // 栈空间
+	* `Person *p = new Person(10,"xiaozhang");` //堆空间 
+* new 出来的对象，只有在 delete 的时候才会析构。
+	* 在栈上分配的对象，在超出作用域的时候，会自动调用析构函数
+	* new 出来的对象，只有在 delete 时才会调用析构函数
+	
+			void test() {
+				Person *p1 = new Person(24); // test() 退出也不会析构 p1，必须手动 delete p1
+				Person p2(24);  // test() 退出的时候，会自动调用析构函数
+			}
+
 
 ##### 初始化成员列表
 * 在构造函数后面直接冒号可以初始化成员变量，形如：`Person():age(10),name("xiao zhang") {....}`
