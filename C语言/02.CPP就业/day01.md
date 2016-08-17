@@ -175,6 +175,29 @@
 * 因为拷贝构造函数的参数必须是 const 引用，所以被拷贝构造函数调用的成员函数，必须声明为 const
 * 为了能让参数为 const 引用的函数（这种函数可能还挺多）调用到某些成员函数，这些函数也必须声明为 const
 
+#### explicit
+* 在构造函数前面加上前缀 explicit
+* 告诉C++编译器，要明确的使用 `Person(10)` 这种形式调用这个构造函数，而不要自作聪明的认为=操作符是要调用构造的。
+* 可能会影响到操作符重载
+
+		class Person 
+		{
+			int age;
+			char *name;
+		public:
+			Person(int i) //没有加 explicit 前缀，Person p = 21; 的时候，编译器会调用这个构造函数。加了就不会了。
+			{
+				age = i;
+				printf("调用了构造函数Person(int i)");
+			}
+		};
+		
+		void main()
+		{
+			Person p = 21;
+			getchar();
+		}
+
 #### 其他·杂项
 * C 和 C++ 都有的 volatile 关键字，告诉编译器不要对这个变量进行优化
 * C++ 增加了一种数据类型： bool 型，值只能是 true 和 false
