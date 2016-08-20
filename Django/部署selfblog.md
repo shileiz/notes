@@ -50,3 +50,37 @@
 #### 登录后台
 * 打开： http://45.62.98.85:8000/xadmin/
 * 用户名密码（init_database.sh时从dump-auth.json导入的）：the5fire / the5fire
+
+#### 安装 Apache + mod_wsgi 
+* 自带了 httpd2.2，不用安装
+* 安装 httpd-devel，用 yum 安装即可
+* 安装 mod_wsgi（不要用 yum 安装，yum 会安装 python2.6 的 mod_wsgi）
+	* 下载源码并解压（本次使用 4.5.5） 
+	* `./configure --with-apxs=/usr/sbin/apxs --with-python=/usr/local/bin/python `
+	* `make`
+	* `make install`
+	* `make clean`
+	* 编辑 `/etc/httpd/conf/httpd.conf`，在 load mod 的部分加入：`LoadModule wsgi_module modules/mod_wsgi.so`
+	* 重启 httpd
+
+#### 部署 django 项目到 Apache 上
+* 参考： [http://blog.csdn.net/ppdouble/article/details/7718594](http://blog.csdn.net/ppdouble/article/details/7718594)
+* 把selfblog 安装到Apache：
+	* 把整个 selfblog 目录拷贝到 `/var/www/wsgi-app`
+	* 编辑 `/etc/httpd/conf/httpd.conf` , 在最后加入： 
+	
+			WSGIScriptAlias / /var/www/wsgi-app/selfblog/selfblog/wsgi.py
+			WSGIPythonPath /var/www/wsgi-app/selfblog
+* log 文件
+ * 修改 settings.py，指定非 DEBUG 模式下的 log 文件位置： `LOG_FILE = '/var/log/selfblog/selfblog.log'`
+ * 将上述文件的用户和组，都改为 apache： `chown apache selfblog.log; chgrp apache selfblog.log`
+* sqlite 文件的访问
+	* 首先在 settings.py 里，把sqlite文件的路径改为绝对路径：`DB_NAME = '/var/www/wsgi-app/selfblog/mydb'`
+	* 其次修改文件 mydb 的所有者和组为 apache：` chown apache mydb; chgrp apache mydb;`
+	* 最后保证 mydb 所在的目录对于 apache 用户有写权限
+* 开启 httpd： `service httpd start`
+
+#### 处理 static 文件
+* 暂时用 Apache 处理 static 文件，后续可以考虑装个 lighttpd
+	* 在 `/var/www/` 下面，`mkdir selfblog-static`
+\......
