@@ -51,3 +51,8 @@ tmpfs                    939876       0    939876   0% /mnt
 
 以后再出现这种情况，直接 adb disable-verity 就好了啊！！！
 
+
+目前看来，出现问题的原因可能是：
+1. 在 disable-verity 的状态刷了原版系统
+2. 这时候刷成修改过的系统
+3. 这时候再次 disable-verity 就出问题了
