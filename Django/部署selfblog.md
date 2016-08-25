@@ -82,5 +82,16 @@
 
 #### 处理 static 文件
 * 暂时用 Apache 处理 static 文件，后续可以考虑装个 lighttpd
-	* 在 `/var/www/` 下面，`mkdir selfblog-static`
-\......
+* 因为作者已经把 static 都 collect 好了，放在了 selfblog/static 里面，所以我们只需要配置 apache 就行了
+* 编辑 Apache 配置文件，在 Alias 部分加入如下:
+
+		Alias /static/ "/var/www/wsgi-app/selfblog/static/"
+		
+		<Directory "/var/www/wsgi-app/selfblog/static/">
+		    Order deny,allow
+		    Allow from all
+		</Directory>
+* 重启 apache，打开主页，格式就正常了
+
+#### 处理 xadmin 的 static 文件
+* cp -r /usr/local/lib/python2.7/site-packages/xadmin/static/xadmin/ /var/www/wsgi-app/selfblog/static/
