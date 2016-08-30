@@ -1,6 +1,6 @@
 #### 安装 sqlite-devel （需要在安装python27之前，要不然还得重装python27）
 
-		yum install sqlite-devel
+	yum install sqlite-devel
 
 #### 升级python到2.7.10（默认是2.6.6）
 * 注意：yum 是依赖python的，如果你把python2.6整个删除了用2.7替代，那么yum就工作不了了
@@ -8,17 +8,18 @@
 	* 下载： wget http://www.python.org/ftp/python/2.7.10/Python-2.7.10.tgz
 	* 解压：tar -xvzf Python-2.7.10.tgz
 	* 安装：
-	
-		cd Python-2.7.10
-		./configure  
-		make all             
-		make install  
-		make clean  
-		make distclean 
-	
+
+			cd Python-2.7.10
+			./configure  
+			make all             
+			make install  
+			make clean  
+			make distclean 
+
 		* 可执行程序会被安装到：/usr/local/bin/python2.7
 		* 执行一下测试安装成功： /usr/local/bin/python2.7 -V
-		* 注意，python27的第三方包会被安装到：/usr/local/lib/python2.7/site-packages/
+		* 注意，python27的第三方包会被安装到：/usr/local/lib/python2.7/site-packages/ 
+
 	* 备份原来的 2.6.6：mv /usr/bin/python /usr/bin/python2.6.6  
 	* 建立软连接，把2.7作为默认python：ln -s /usr/local/bin/python2.7 /usr/bin/python  
 	* 解决 yum 用不了的问题：
@@ -36,7 +37,8 @@
 #### 修改 settings.py
 * 把 vps 的 ip 地址加入 ALLOWED_HOSTS
 
-	ALLOWED_HOSTS = ['localhost', '45.62.98.85']
+		ALLOWED_HOSTS = ['localhost', '45.62.98.85']
+
 * 把 DEBUG 强制改成 Ture （如果不是 DEBUG，static 得不到）	
 
 #### 初始化数据库
@@ -68,12 +70,13 @@
 * 把selfblog 安装到Apache：
 	* 把整个 selfblog 目录拷贝到 `/var/www/wsgi-app`
 	* 编辑 `/etc/httpd/conf/httpd.conf` , 在最后加入： 
-	
+
 			WSGIScriptAlias / /var/www/wsgi-app/selfblog/selfblog/wsgi.py
 			WSGIPythonPath /var/www/wsgi-app/selfblog
+
 * log 文件
- * 修改 settings.py，指定非 DEBUG 模式下的 log 文件位置： `LOG_FILE = '/var/log/selfblog/selfblog.log'`
- * 将上述文件的用户和组，都改为 apache： `chown apache selfblog.log; chgrp apache selfblog.log`
+	* 修改 settings.py，指定非 DEBUG 模式下的 log 文件位置： `LOG_FILE = '/var/log/selfblog/selfblog.log'`
+	* 将上述文件的用户和组，都改为 apache： `chown apache selfblog.log; chgrp apache selfblog.log`
 * sqlite 文件的访问
 	* 首先在 settings.py 里，把sqlite文件的路径改为绝对路径：`DB_NAME = '/var/www/wsgi-app/selfblog/mydb'`
 	* 其次修改文件 mydb 的所有者和组为 apache：` chown apache mydb; chgrp apache mydb;`
@@ -91,6 +94,7 @@
 		    Order deny,allow
 		    Allow from all
 		</Directory>
+
 * 重启 apache，打开主页，格式就正常了
 
 #### 处理 xadmin 的 static 文件
