@@ -23,6 +23,7 @@
 * 把这个目录重命名叫jni
 * 修改 decoder.mk 把以下行注释掉：
 
+		:::makefile
 		# include $(LOCAL_PATH)/decoder.arm64.mk
 		# include $(LOCAL_PATH)/decoder.x86.mk
 		# include $(LOCAL_PATH)/decoder.x86_64.mk
@@ -31,6 +32,7 @@
 
 * 修改 decoder.mk 在最后一行的前面，加入以下内容：
 
+		:::makefile
 		LOCAL_SRC_FILES += $(LOCAL_SRC_FILES_arm)
 		LOCAL_CFLAGS += $(LOCAL_CFLAGS_arm)
 		LOCAL_C_INCLUDES += $(LOCAL_C_INCLUDES_arm)
@@ -49,7 +51,8 @@
 	* 把 decoder.arm64.mk 拷贝到jni目录里
 	* 把decoder.mk里 `include $(LOCAL_PATH)/decoder.arm64.mk` 这行注释打开，把 `include $(LOCAL_PATH)/decoder.arm.mk` 注释掉
 	* 把decoder.mk里这三行改成arm64对应的：
-	
+
+			:::makefile	
 			LOCAL_SRC_FILES += $(LOCAL_SRC_FILES_arm64)
 			LOCAL_CFLAGS += $(LOCAL_CFLAGS_arm64)
 			LOCAL_C_INCLUDES += $(LOCAL_C_INCLUDES_arm64)
@@ -66,6 +69,7 @@
 * 把自动生成的 mydecode.cpp 重命名为 mydecode.c
 * 修改自动生成的Android.mk，改后的全部内容如下：
 
+		:::makefile
 		LOCAL_PATH := $(call my-dir)
 		
 		include $(CLEAR_VARS)
@@ -83,6 +87,7 @@
 * 修改MainActivity.java，load mydecode库，定义一个native方法叫mydecode()，具体细节不写了。
 * 修改mydecode.c，实现native方法，修改完的mydecode.c如下：
 
+		:::c
 		#include <jni.h>
 		JNIEXPORT jint JNICALL Java_com_zsl_useprebuidlibhevc_MainActivity_mydecode
 		  (JNIEnv *env, jobject obj)
@@ -107,7 +112,8 @@
 	* `#define INLINE inline` 改为 `#define INLINE` 
 	* 修改GNU-C特有函数 `__builtin_clz` 和 `__builtin_ctz` 对应代码段如下：   
 		* 把 
-	
+
+				:::c	
 				if(u4_word)
 			        return (__builtin_clz(u4_word));
 			    else
@@ -115,6 +121,7 @@
 
 		* 改为  
 
+				:::c
 				if(u4_word)
 				{
 					int c = 0;
@@ -130,6 +137,7 @@
 
 		* 把  
 
+				:::c
 				if(0 == u4_word)
 			        return 31;
 			    else
@@ -140,7 +148,8 @@
 			    }  
 		
 		* 改为  
-	
+
+				:::c	
 			    if(0==u4_word)
 					return 31;
 				else
@@ -159,12 +168,14 @@
 	* 修改GNU-C特有的`__attribute__ ((attribute-list))`对应的代码段如下：  
 		* 把  
 
+				:::c
 				#define MEM_ALIGN8 __attribute__ ((aligned (8)))
 				#define MEM_ALIGN16 __attribute__ ((aligned (16)))
 				#define MEM_ALIGN32 __attribute__ ((aligned (32)))
 	
 		* 改为  
 
+				:::c
 				#define MEM_ALIGN8 
 				#define MEM_ALIGN16 
 				#define MEM_ALIGN32 
