@@ -23,7 +23,8 @@
 * pygments 支持的所有语言可以在这里查到：[http://pygments.org/docs/lexers/#lexers-for-c-c-languages](http://pygments.org/docs/lexers/#lexers-for-c-c-languages)。
 
 #### 步骤三：跟 MarkdownPad 的样式统一起来
-* 因为平时书写一般是在 windows 的 MarkdownPad 上进行，习惯了所见即所得
-* 为了能跟 MarkdownPad 统一起来，从 MarkdownPad 生成的 html 文件中提取了一个 css，命名为 mdpadbase.css，让模板detail.html直接引用了。
-* 这样会造成很多基本元素的 css 被覆盖，比如 h1、h2 啥的，导致侧边栏都跑到最下面去了，这种方案不行。
-* 正常的做法应该是自己给 markdown 写一个 extension，配合自己从 Markdownpad 抠出来的 css，给这个抠出来的 css 加上 class，这个稍微麻烦，以后再整。
+* 因为平时书写一般是在 windows 的 MarkdownPad2 上进行，习惯了所见即所得
+* 为了能跟 MarkdownPad2 统一起来，从 MarkdownPad 生成的 html 文件中提取了一个 css，命名为 mdpadbase.css，让模板detail.html直接引用了。
+* 从 MarkdownPad2 里提取出来的 css，实际上来自这里： [https://github.com/nicolashery/markdownpad-github/blob/master/markdownpad-github.css](https://github.com/nicolashery/markdownpad-github/blob/master/markdownpad-github.css)
+* 这个 css 要稍作修改，把 html，body 相关的样式去掉，然后在所有选择器前面加上类前缀 .content
+* 因为博客正文的 div 的 class 就是 content

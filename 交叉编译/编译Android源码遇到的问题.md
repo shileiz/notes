@@ -50,3 +50,12 @@
 		把找到的都考过去
 
 		
+=======
+
+* 问题5：
+
+		编译好之后，system ui 起不来，看 logcat，提示 librmhdplayer.so 找不到，导致 mediaserver 进程起不来
+
+* 解决方法：
+
+		把编译出来的 64 位的 librmhdplayer.so(在 out/target/product/flounder/vendor/lib64/) 拷贝到 /system/lib64 即可
