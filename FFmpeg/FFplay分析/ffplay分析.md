@@ -1,33 +1,113 @@
 ### 说明
-* 分析的 ffplay.c 的版本是 ffmpeg-release-2.8 源码里带的，从 [git](https://github.com/FFmpeg/FFmpeg/tree/release/2.8) 上下载的。
+* 分析的 ffplay.c 的版本是 ffmpeg-release-2.8 源码里带的，从 [ffmpeg 的 github](https://github.com/FFmpeg/FFmpeg/tree/release/2.8) 上下载的。
 
 ### 大块儿
 * main 进来先做了一些初始化和判断，然后进入 `stream_open`, `stream_open` 函数会开一个线程：`read_thread`
-* 然后 main 函数（主线程）就进入了 event_loop , event_loop 其实就是视频的显示线程。后面会单独分析。
+* 然后 main 函数（主线程）就进入了 `event_loop` , `event_loop` 其实就是视频的显示线程。后面会单独分析。
 * `read_thread` 线程会先做一些初始化和判断，然后分别对 video/audio/subtitle 调用 `stream_component_open`
 * `stream_component_open` 在做完初始化后，分别为 video/audio/subtitle 启动了各自的线程： `video_thread/audio_thread/subtitle_thread`
 * `read_thread` 打开 video/audio/subtitle 各自的线程后，就进入了自己的主循环： 不停的把 packet 读入 `is->videoq/is->audioq/is->subtitleq`
 
 ### 大块儿总结
 * 算上主线程一共5个线程：`main、read_thread、audio_thread、video_thread、subtitle_thread`
-* main 是 video 的显示线程，从 pictq 里拿出图像，在“适当的”时间显示到屏幕上（或丢弃）。另外该线程还负责相应鼠标键盘等 event。
+* main 是 video 的显示线程，从 pictq 里拿出图像，在“适当的”时间显示到屏幕上（或丢弃）。另外该线程还负责响应鼠标键盘等 event。
 * read thread 是读包线程，可以理解为 demux 线程，负责从文件里读出 packet，放入对应的队列里（`is->videoq、is->audioq、is->subtitleq`）
 * video thread 是视频解码线程，从 videoq 里拿出 packet，解成 frame，放入 pictq。
 
 ### video_thread
 
-`video_thread` 在循环干这件事儿：
+##### `video_thread` 在循环干这件事儿：
+* 从 `is->viddec->queue`（其实就是 `is->videoq` ） 拿出一个 pkt, 并把它解码到局部变量 frame（AVFrame类型）里。这个过程封装到了函数 `get_video_frame()` 里，其中最主要的一行就是：
 
-	从 `is->viddec->queue` 拿出一个 pkt, 并把它解码到局部变量 frame（AVFrame类型）里。
-	然后把 frame (转换成 Frame 类型) 压入队列 is->pictq 。
-	被压入的 frame 的 pts， duration，pos，serial 被设置好了（当然，它的 bmp 也被分配好了）：
-	pts = best_effort_timestamp * time_base
-	duration = 1/framerate;  // framerate = av_guess_frame_rate(is->ic, is->video_st, NULL);
-	pos = av_frame_get_pkt_pos(frame)
-	serial = is->viddec.pkt_serial
+		:::c
+		got_picture = decoder_decode_frame(&is->viddec, frame, NULL)  
+		// 从 is->viddec->queue 拿出一个 pkt, 并解码到 frame 里
+
+* 然后把 AVFrame 类型的 frame 转换成 Frame 类型，压入队列 `is->pictq`。这个过程封装到了函数 `queue_picture()` 里。其中的主干过程如下：
+
+		:::c
+		/* ffplay.c::queue_picture() */
+		Frame *vp; /*搞一个局部变量来存放转换结果，最后入队列的就是它*/
+		
+		/* 从 is->pictq 拿到写指针 Frame */
+		vp = frame_queue_peek_writable(&is->pictq) 
+		
+		/* AVFrame 的宽高赋值给 Frame 的宽高 */
+		vp->width = src_frame->width;
+        vp->height = src_frame->height;
+
+		/* ... 省略为 vp->bmp 分配空间的部分 */
+
+		/* 把 AVFrame 里的 data 进行 scale，放入 vp->bmp */
+        sws_scale(is->img_convert_ctx, src_frame->data, src_frame->linesize,
+                  0, vp->height, pict.data, pict.linesize); 
+		
+		/* 其他信息赋值，pts、duration、pos、serial 都是作为参数传进来的，也就是先算好了这些值，再入队列 */
+        vp->pts = pts;
+        vp->duration = duration;
+        vp->pos = pos;
+        vp->serial = serial;
+
+		/* 移动指针 */
+		frame_queue_push(&is->pictq);
+
+
+* 被压入的 frame 的 pts， duration，pos，serial 被设置好了（当然，它的 bmp 也被分配好了）：
+
+		:::c
+		/* 以下为 ffplay.c 的计算结果，计算过程代码没有抄到这里 */
+		pts = best_effort_timestamp * time_base
+		duration = 1/framerate;  /* framerate = av_guess_frame_rate(is->ic, is->video_st, NULL); */
+		pos = av_frame_get_pkt_pos(frame)
+		serial = is->viddec.pkt_serial
+
+### audio_thread
+
+##### `audio_thread` 在循环干这件事儿：
+* 从 `is->auddec->queue`（其实就是 `is->audioq` ） 拿出一个 pkt, 并把它解码到局部变量 frame（AVFrame类型）里。 
+
+		:::c
+		AVFrame *frame = av_frame_alloc();    /* 在循环外面分配一个局部变量 frame */
+		got_frame = decoder_decode_frame(&is->auddec, frame, NULL)    /* 在循环里面不停的解码，解到 frame 里*/
+
+* 然后把 AVFrame 类型的 frame 转换成 Frame 类型，压入队列 `is->sampq`。主要过程如下：
+
+		:::c
+		/* ffplay.c::audio_thread() */
+		af = frame_queue_peek_writable(&is->sampq)  /* 找到 is->sampq 的写指针 */
+
+		/* 写入信息 */
+        af->pts = (frame->pts == AV_NOPTS_VALUE) ? NAN : frame->pts * av_q2d(tb);
+        af->pos = av_frame_get_pkt_pos(frame);
+        af->serial = is->auddec.pkt_serial;
+        af->duration = av_q2d((AVRational){frame->nb_samples, frame->sample_rate});
+		
+		/* 让 Frame 里的 AVFrame 等于 解码出来的那个 AVFrame (即局部变量 frame)*/
+        av_frame_move_ref(af->frame, frame); /* *(af->frame) = *frame */
+
+		/* 移动指针 */
+        frame_queue_push(&is->sampq);
 
 ### FrameQueue 及其几个相关函数
 * 首先要知道 Frame：Frame 是个自定义结构体，对于视频，用它来表示一个图片。音频用Frame表示Sample，Frame还能表示字幕。
+
+		:::c
+		/* Common struct for handling all types of decoded data and allocated render buffers. */
+		typedef struct Frame {
+		    AVFrame *frame;
+		    AVSubtitle sub;
+		    int serial;
+		    double pts;           /* presentation timestamp for the frame */
+		    double duration;      /* estimated duration of the frame */
+		    int64_t pos;          /* byte position of the frame in the input file */
+		    SDL_Overlay *bmp;
+		    int allocated;
+		    int reallocate;
+		    int width;
+		    int height;
+		    AVRational sar;
+		} Frame;
+
 * ffplay 里用 is->pictq 来存储解码出来的视频图片，这就是一个 FrameQueue
 * FrameQueue 如下：
 

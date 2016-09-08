@@ -2323,6 +2323,12 @@ static int synchronize_audio(VideoState *is, int nb_samples)
  * The processed audio frame is decoded, converted if required, and
  * stored in is->audio_buf, with size in bytes given by the return
  * value.
+
+ * ZSL
+ * 虽然名字叫 decode，其实并不解码，只是从 is->sampq 里拿出 af( audioframe,Frame类型 )
+ * 把 af->frame( AVFrame类型 )里的 data 经过 swr_convert() 之后，存入 is->audio_buf
+ * 返回存入的大小( 即resample之后的大小 )
+ * 
  */
 static int audio_decode_frame(VideoState *is)
 {
