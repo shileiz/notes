@@ -31,6 +31,9 @@ extern "C" {
 #define SAMPLE_QUEUE_SIZE 9
 #define FRAME_QUEUE_SIZE FFMAX(SAMPLE_QUEUE_SIZE, VIDEO_PICTURE_QUEUE_SIZE)
 
+#define FF_ALLOC_EVENT   (SDL_USEREVENT)
+#define FF_QUIT_EVENT    (SDL_USEREVENT + 2)
+
 typedef struct PacketQueue {
 	AVPacketList *first_pkt, *last_pkt;
 	int nb_packets;
@@ -83,6 +86,12 @@ typedef struct VideoState {
 	struct SwsContext *img_convert_ctx;
 
 	char filename[1024];
+
+	/*ffplay.c把以下封装在了别的结构体里，比如Decoder*/
+	AVCodecContext *audio_ctx;
+	AVCodecContext *video_ctx;
+	AVPacket  audio_pkt;
+
 } VideoState;
 
 SDL_Surface     *screen;
@@ -175,6 +184,27 @@ static int frame_queue_init(FrameQueue *f, PacketQueue *pktq)
 		if (!(f->queue[i].frame = av_frame_alloc()))
 			return AVERROR(ENOMEM);
 	return 0;
+}
+
+static void frame_queue_push(FrameQueue *f)
+{
+	if (++f->windex == f->max_size)
+		f->windex = 0;
+	SDL_LockMutex(f->mutex);
+	f->size++;
+	SDL_CondSignal(f->cond);
+	SDL_UnlockMutex(f->mutex);
+}
+
+static Frame *frame_queue_peek_writable(FrameQueue *f)
+{
+	/* wait until we have space to put a new frame */
+	SDL_LockMutex(f->mutex);
+	while (f->size >= f->max_size) {
+		SDL_CondWait(f->cond, f->mutex);
+	}
+	SDL_UnlockMutex(f->mutex);
+	return &f->queue[f->windex];
 }
 
 int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size) {
@@ -370,107 +400,110 @@ void alloc_picture(void *userdata) {
 
 }
 
-int queue_picture(VideoState *is, AVFrame *pFrame) {
+/* ------------------ */
 
-	VideoPicture *vp;
-	int dst_pix_fmt;
-	AVPicture pict;
-
-	/* wait until we have space for a new pic */
-	SDL_LockMutex(is->pictq_mutex);
-	while (is->pictq_size >= VIDEO_PICTURE_QUEUE_SIZE &&
-		!is->quit) {
-		SDL_CondWait(is->pictq_cond, is->pictq_mutex);
-	}
-	SDL_UnlockMutex(is->pictq_mutex);
-
-	if (is->quit)
-		return -1;
-
-	// windex is set to 0 initially
-	vp = &is->pictq[is->pictq_windex];
-
-	/* allocate or resize the buffer! */
-	if (!vp->bmp ||
-		vp->width != is->video_ctx->width ||
-		vp->height != is->video_ctx->height) {
-		SDL_Event event;
-
-		vp->allocated = 0;
-		alloc_picture(is);
-		if (is->quit) {
-			return -1;
-		}
-	}
-
-	/* We have a place to put our picture on the queue */
-
-	if (vp->bmp) {
-
-		SDL_LockYUVOverlay(vp->bmp);
-
-		dst_pix_fmt = PIX_FMT_YUV420P;
-		/* point pict at the queue */
-
-		pict.data[0] = vp->bmp->pixels[0];
-		pict.data[1] = vp->bmp->pixels[2];
-		pict.data[2] = vp->bmp->pixels[1];
-
-		pict.linesize[0] = vp->bmp->pitches[0];
-		pict.linesize[1] = vp->bmp->pitches[2];
-		pict.linesize[2] = vp->bmp->pitches[1];
-
-		// Convert the image into YUV format that SDL uses
-		sws_scale(is->sws_ctx, (uint8_t const * const *)pFrame->data,
-			pFrame->linesize, 0, is->video_ctx->height,
-			pict.data, pict.linesize);
-
-		SDL_UnlockYUVOverlay(vp->bmp);
-		/* now we inform our display thread that we have a pic ready */
-		if (++is->pictq_windex == VIDEO_PICTURE_QUEUE_SIZE) {
-			is->pictq_windex = 0;
-		}
-		SDL_LockMutex(is->pictq_mutex);
-		is->pictq_size++;
-		SDL_UnlockMutex(is->pictq_mutex);
-	}
-	return 0;
-}
-
-/*
-从 is->videoq 拿出一个 packet 解码，把解出来的 frame 里的图像转为 VideoPicture 放到 is->pictq 里。然后释放掉拿出来的 packet。
-目前 is->pictq 的长度是 1：#define VIDEO_PICTURE_QUEUE_SIZE 1，所以每次只能放进去一个frame，放的过程中如果发现 pictq 满了，则等待 pictq_cond 发生
-
-*/
-int video_thread(void *arg) {
+int video_thread(void *arg)
+{
 	VideoState *is = (VideoState *)arg;
-	AVPacket pkt1, *packet = &pkt1;
-	int frameFinished;
-	AVFrame *pFrame;
+	AVPacket pkt1, *pkt = &pkt1;
+	int got_frame = 0;
+	AVFrame *frame = av_frame_alloc();
+	Frame *vp;
 
-	pFrame = av_frame_alloc();
 
 	for (;;) {
-		if (packet_queue_get(&is->videoq, packet, 1) < 0) {
+		if (packet_queue_get(&is->videoq, pkt, 1) < 0) {
 			// means we quit getting packets
 			break;
 		}
 		// Decode video frame
-		avcodec_decode_video2(is->video_ctx, pFrame, &frameFinished, packet);
+		avcodec_decode_video2(is->video_ctx, frame, &got_frame, pkt);
 		// Did we get a video frame?
-		if (frameFinished) {
-			if (queue_picture(is, pFrame) < 0) {
-				break;
+		if (got_frame) {
+			vp = frame_queue_peek_writable(&is->pictq);
+
+			if (!vp->bmp || !vp->allocated ||
+				vp->width != frame->width ||
+				vp->height != frame->height) {
+				SDL_Event event;
+
+				vp->allocated = 0;
+				vp->width = frame->width;
+				vp->height = frame->height;
+
+				/* the allocation must be done in the main thread to avoid
+				locking problems. */
+				event.type = FF_ALLOC_EVENT;
+				event.user.data1 = is;
+				SDL_PushEvent(&event);
+
+				/* wait until the picture is allocated */
+				SDL_LockMutex(is->pictq.mutex);
+				while (!vp->allocated) {
+					SDL_CondWait(is->pictq.cond, is->pictq.mutex);
+				}
+				SDL_UnlockMutex(is->pictq.mutex);
 			}
+
+			/* if the frame is not skipped, then display it */
+			if (vp->bmp) {
+				AVPicture pict = { { 0 } };
+
+				/* get a pointer on the bitmap */
+				SDL_LockYUVOverlay(vp->bmp);
+
+				pict.data[0] = vp->bmp->pixels[0];
+				pict.data[1] = vp->bmp->pixels[2];
+				pict.data[2] = vp->bmp->pixels[1];
+
+				pict.linesize[0] = vp->bmp->pitches[0];
+				pict.linesize[1] = vp->bmp->pitches[2];
+				pict.linesize[2] = vp->bmp->pitches[1];
+
+				is->img_convert_ctx = sws_getCachedContext(is->img_convert_ctx,
+					vp->width, vp->height, is->video_ctx->pix_fmt, vp->width, vp->height,
+					AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
+
+				sws_scale(is->img_convert_ctx, frame->data, frame->linesize,
+					0, vp->height, pict.data, pict.linesize);
+
+				SDL_UnlockYUVOverlay(vp->bmp);
+
+				/* 移动指针 */
+				frame_queue_push(&is->pictq);
+
+			}
+			av_free_packet(pkt);
 		}
-		av_free_packet(packet);
+		av_frame_free(&frame);
+		return 0;
 	}
-	av_frame_free(&pFrame);
+
+}
+
+static int audio_thread(void *arg)
+{
+	VideoState *is = (VideoState*)arg;
+	AVFrame *frame = av_frame_alloc();
+	Frame *af;
+	int got_frame = 0;
+	AVPacket *pkt = &is->audio_pkt; /* 为什么不跟 video_thread 一样，用 AVPacket pkt1, *pkt = &pkt1; ？ audio_pkt一定要全局吗？ */
+	do {
+		if (packet_queue_get(&is->audioq, pkt, 1) < 0) {
+			break;
+		}
+		avcodec_decode_audio4(is->audio_ctx, frame, &got_frame, pkt);
+		if (got_frame) {
+			av_frame_move_ref(af->frame, frame);
+			frame_queue_push(&is->sampq);
+		}
+	} while(1);
+	av_frame_free(&frame);
 	return 0;
 }
 
 /* open a given stream. Return 0 if OK 
-   这里还分别打开了音频解码线程和视频解码线程
+   这里还分别打开了音频解码线程、视频解码线程、音频播放线程
 */
 static int stream_component_open(VideoState *is, int stream_index)
 {
@@ -516,8 +549,6 @@ static int stream_component_open(VideoState *is, int stream_index)
 		break;
 	}
 }
-
-
 
 static int read_thread(void *arg)
 {
@@ -603,33 +634,38 @@ fail:
 	return 0;
 }
 
+
+
+static void event_loop(VideoState *cur_stream)
+{
+	SDL_Event event;
+	for (;;) {
+		SDL_WaitEvent(&event);
+		switch (event.type) {
+		case SDL_QUIT:
+		case FF_QUIT_EVENT:
+			SDL_Quit();
+			exit(0);
+			break;
+		case FF_ALLOC_EVENT:
+			alloc_picture(event.user.data1);
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+
 int main(int argc, char **argv)
 {
+	int flags;
 	VideoState *is;
-	is = (VideoState*)av_mallocz(sizeof(VideoState));
-	av_strlcpy(is->filename, argv[1], sizeof(is->filename));
-
-	/* register all codecs, demux and protocols */
 	av_register_all();
 
-	frame_queue_init(&is->pictq, &is->videoq);
-	frame_queue_init(&is->sampq, &is->audioq);
-
-	packet_queue_init(&is->videoq);
-	packet_queue_init(&is->audioq);
-
-	is->read_tid = SDL_CreateThread(read_thread, is);
-
-	/* --------- ------------------ ---------------- */
-
-	int flags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER;
-
-#if !defined(_WIN32) && !defined(__APPLE__)
-	flags |= SDL_INIT_EVENTTHREAD; /* Not supported on Windows or Mac OS X */
-#endif
+	flags = SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER;
 	if (SDL_Init(flags)) {
 		av_log(NULL, AV_LOG_FATAL, "Could not initialize SDL - %s\n", SDL_GetError());
-		av_log(NULL, AV_LOG_FATAL, "(Did you set the DISPLAY variable?)\n");
 		exit(1);
 	}
 
@@ -637,23 +673,19 @@ int main(int argc, char **argv)
 	SDL_EventState(SDL_SYSWMEVENT, SDL_IGNORE);
 	SDL_EventState(SDL_USEREVENT, SDL_IGNORE);
 
-	if (av_lockmgr_register(lockmgr)) {
-		av_log(NULL, AV_LOG_FATAL, "Could not initialize lock manager!\n");
-		do_exit(NULL);
-	}
+	/* ffplay.c 把下述内容封装到了函数 stream_open() 里 */
+	is = (VideoState*)av_mallocz(sizeof(VideoState));
+	av_strlcpy(is->filename, argv[1], sizeof(is->filename));
+	frame_queue_init(&is->pictq, &is->videoq);
+	frame_queue_init(&is->sampq, &is->audioq);
+	packet_queue_init(&is->videoq);
+	packet_queue_init(&is->audioq);
+	is->read_tid = SDL_CreateThread(read_thread, is); /* 开启读包线程，里面会再开启音频解码线程、音频播放线程、视频解码线程*/
 
-	av_init_packet(&flush_pkt);
-	flush_pkt.data = (uint8_t *)&flush_pkt;
-
-	is = stream_open(input_filename, file_iformat);
-	if (!is) {
-		av_log(NULL, AV_LOG_FATAL, "Failed to initialize VideoState!\n");
-		do_exit(NULL);
-	}
-
+	/* event_loop 目前只处理退出和 allocate Pictur*/
 	event_loop(is);
 
-	/* never returns */
-
+	/* ffplay 为什么在 event_loop 里的有一层循环里调用的这个函数？ */
+	video_refresh(is);
 	return 0;
 }
