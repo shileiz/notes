@@ -3,6 +3,7 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
 #include <libavutil/avstring.h>
+#include <libavutil/time.h>
 #include <libswresample/swresample.h>
 }
 
@@ -185,7 +186,6 @@ static int frame_queue_init(FrameQueue *f, PacketQueue *pktq)
 			return AVERROR(ENOMEM);
 	return 0;
 }
-
 static void frame_queue_push(FrameQueue *f)
 {
 	if (++f->windex == f->max_size)
@@ -195,7 +195,6 @@ static void frame_queue_push(FrameQueue *f)
 	SDL_CondSignal(f->cond);
 	SDL_UnlockMutex(f->mutex);
 }
-
 static Frame *frame_queue_peek_writable(FrameQueue *f)
 {
 	/* wait until we have space to put a new frame */
@@ -205,6 +204,10 @@ static Frame *frame_queue_peek_writable(FrameQueue *f)
 	}
 	SDL_UnlockMutex(f->mutex);
 	return &f->queue[f->windex];
+}
+static Frame *frame_queue_peek(FrameQueue *f)
+{
+	return &f->queue[(f->rindex) % f->max_size];
 }
 
 int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size) {
@@ -301,23 +304,11 @@ static Uint32 sdl_refresh_timer_cb(Uint32 interval, void *opaque) {
 	return 0; /* 0 means stop timer */
 }
 
-/* schedule a video refresh in 'delay' ms */
-/*
-不要用 SDL Timer 了：
-1. 比如你定了一个 40 毫秒的 timer，可能10毫秒甚至1毫秒就到时间了
-2. ffplay（ffmpeg2.8） 已经不用 SDL timer 了，使用 av_usleep() 代替。
-TODO，替换掉
-*/
-static void schedule_refresh(VideoState *is, int delay) {
-	SDL_AddTimer(delay, sdl_refresh_timer_cb, is);
-}
 
 void video_display(VideoState *is) {
-
 	SDL_Rect rect;
-	VideoPicture *vp;
-
-	vp = &is->pictq[is->pictq_rindex];
+	Frame *vp;
+	vp = frame_queue_peek(&is->pictq);
 	if (vp->bmp) {
 		rect.x = 0;
 		rect.y = 0;
@@ -326,52 +317,9 @@ void video_display(VideoState *is) {
 		SDL_LockMutex(screen_mutex);
 		SDL_DisplayYUVOverlay(vp->bmp, &rect);
 		SDL_UnlockMutex(screen_mutex);
-
 	}
 }
 
-/*
-每次timer到时间会进来（timer到时间发 FF_REFRESH_EVENT，收到 FF_REFRESH_EVENT 会进来）
-一个timer只进一次timer就失效了。不过本函数里面会再起一个timer。
-从is->pictq拿出一个 VideoPicture 进行显示，然后pictq的读指针向前移动一步
-*/
-void video_refresh_timer(void *userdata) {
-
-	VideoState *is = (VideoState *)userdata;
-	VideoPicture *vp;
-
-	if (is->video_st) {
-		if (is->pictq_size == 0) {
-			schedule_refresh(is, 1);
-		}
-		else {
-			//vp = &is->pictq[is->pictq_rindex];
-			/* Now, normally here goes a ton of code
-			about timing, etc. we're just going to
-			guess at a delay for now. You can
-			increase and decrease this value and hard code
-			the timing - but I don't suggest that ;)
-			We'll learn how to do it for real later.
-			*/
-			schedule_refresh(is, 41);
-
-			/* show the picture! */
-			video_display(is);
-
-			/* update queue for next picture! */
-			if (++is->pictq_rindex == VIDEO_PICTURE_QUEUE_SIZE) {
-				is->pictq_rindex = 0;
-			}
-			SDL_LockMutex(is->pictq_mutex);
-			is->pictq_size--;
-			SDL_CondSignal(is->pictq_cond);
-			SDL_UnlockMutex(is->pictq_mutex);
-		}
-	}
-	else {
-		schedule_refresh(is, 100);
-	}
-}
 
 /*
 为写指针所在的VideoPicture（is->pictq[is->pictq_windex]）在堆空间分配一个 SDL_Overlay
@@ -635,12 +583,16 @@ fail:
 }
 
 
-
-static void event_loop(VideoState *cur_stream)
+static void event_loop(VideoState *is)
 {
 	SDL_Event event;
 	for (;;) {
-		SDL_WaitEvent(&event);
+		SDL_PumpEvents();
+		while (!SDL_PeepEvents(&event, 1, SDL_GETEVENT, SDL_ALLEVENTS)) {
+			av_usleep(40000); //TODO 40000改为帧率分之一
+			video_display(is);
+			SDL_PumpEvents();
+			}
 		switch (event.type) {
 		case SDL_QUIT:
 		case FF_QUIT_EVENT:
@@ -684,8 +636,5 @@ int main(int argc, char **argv)
 
 	/* event_loop 目前只处理退出和 allocate Pictur*/
 	event_loop(is);
-
-	/* ffplay 为什么在 event_loop 里的有一层循环里调用的这个函数？ */
-	video_refresh(is);
 	return 0;
 }
