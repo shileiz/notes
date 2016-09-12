@@ -5,7 +5,9 @@
 * 修改 adminx.py，在适当的位置加入如下行：
 
 		:::python
-		obj.content_html = markdown.markdown(obj.content, extensions=['codehilite',], extension_configs = {'codehilite':{'noclasses':'True'}})
+            obj.content_html = markdown.markdown(obj.content, extensions=['codehilite', ],
+                                                 extension_configs={'codehilite':
+                                                                    {'noclasses': 'True', 'pygments_style': 'emacs'}})
 
 * 以上的 `extensions=['codehilite',], extension_configs...` 等等，是为了代码高亮，下面说
 
@@ -21,6 +23,9 @@
 * codehilite 文档：[http://pythonhosted.org/Markdown/extensions/code_hilite.html](http://pythonhosted.org/Markdown/extensions/code_hilite.html)
 * 由于博客里的代码很多都是片段，靠 pygments 去猜这段代码是什么语言，有时候可能猜不准。所以用了 codehilite 的一个接口，在博文的代码段的第一行用三个冒号后面跟语言名的方式，告诉 codehilite（pygments）这是哪种语言。这么搞给写博客时带来了点麻烦，需要在每个代码块最前面多加一行，但也只能这样了。
 * pygments 支持的所有语言可以在这里查到：[http://pygments.org/docs/lexers/#lexers-for-c-c-languages](http://pygments.org/docs/lexers/#lexers-for-c-c-languages)。
+* codehilite 还有一个参数 `pygments_style` 用来设置 pygments 的style。pygments 的 builtin sytle 有：
+
+		['default', 'emacs', 'friendly', 'colorful']
 
 #### 步骤三：跟 MarkdownPad 的样式统一起来
 * 因为平时书写一般是在 windows 的 MarkdownPad2 上进行，习惯了所见即所得
@@ -28,3 +33,12 @@
 * 从 MarkdownPad2 里提取出来的 css，实际上来自这里： [https://github.com/nicolashery/markdownpad-github/blob/master/markdownpad-github.css](https://github.com/nicolashery/markdownpad-github/blob/master/markdownpad-github.css)
 * 这个 css 要稍作修改，把 html，body 相关的样式去掉，然后在所有选择器前面加上类前缀 .content
 * 因为博客正文的 div 的 class 就是 content
+* 因为作者原来的css会跟 MarkdownPad2 的css稍有冲突，所以改了一下 `static/blog/css/style.css` 。把这段注掉了：
+
+		:::css
+		.detail h2 {
+		    margin:10px 0 0 0;
+		    font-size: 16px;
+		    height: 24px;
+		    padding-bottom: 10px;
+		}
