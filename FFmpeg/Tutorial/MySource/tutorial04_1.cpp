@@ -210,64 +210,32 @@ static Frame *frame_queue_peek(FrameQueue *f)
 	return &f->queue[(f->rindex) % f->max_size];
 }
 
-int audio_decode_frame(VideoState *is, uint8_t *audio_buf, int buf_size) {
+/*
+* ZSL
+* 虽然名字叫 decode，其实并不解码，只是从 is->sampq 里拿出 af（audioframe,Frame类型）
+* 把 af->frame(AVFrame类型)里的 data 经过 swr_convert() 之后，存入 is->audio_buf
+* 返回存入的大小(即 resample 之后的大小)
+*
+*/
+int audio_decode_frame(VideoState *is) {
 
-	int len1, resampled_data_size = 0;
-	AVPacket *pkt = &is->audio_pkt;
-
-	for (;;) {
-		while (is->audio_pkt_size > 0) {
-			int got_frame = 0;
-			len1 = avcodec_decode_audio4(is->audio_ctx, &is->audio_frame, &got_frame, pkt);
-			if (len1 < 0) {
-				/* if error, skip frame */
-				is->audio_pkt_size = 0;
-				break;
-			}
-			if (got_frame) {
-
-				// ---------------
-
-
-				//swr_set_compensation(swr_ctx,0, frame.nb_samples*44100/ aCodecCtx->sample_rate);
-
-				//准备调用 swr_convert 的其他4个必须参数: out,out_samples_per_ch,in,in_samples_per_ch
-				uint8_t **out = &audio_buf;
-				const uint8_t **in = (const uint8_t **)is->audio_frame.extended_data;
-				//调用 swr_convert 进行转换
-				int len2 = 0;
-				len2 = swr_convert(is->swr_ctx, out, is->audio_frame.nb_samples, in, is->audio_frame.nb_samples);
-				resampled_data_size = len2 * 2 * av_get_bytes_per_sample(AV_SAMPLE_FMT_S16);
-				//memcpy(audio_buf, frame.data[0], data_size);
-
-				// ----------------
-
-			}
-			is->audio_pkt_data += len1;
-			is->audio_pkt_size -= len1;
-			if (resampled_data_size <= 0) {
-				/* No data yet, get more frames */
-				continue;
-			}
-			/* We have data, return it and come back for more later */
-			return resampled_data_size;
-		}
-		if (pkt->data)
-			av_free_packet(pkt);
-
-		if (is->quit) {
-			return -1;
-		}
-		/* next packet */
-		if (packet_queue_get(&is->audioq, pkt, 1) < 0) {
-			return -1;
-		}
-		is->audio_pkt_data = pkt->data;
-		is->audio_pkt_size = pkt->size;
+	int data_size, resampled_data_size;
+	Frame *af;
+	
+	data_size = av_samples_get_buffer_size(NULL, av_frame_get_channels(af->frame),
+		af->frame->nb_samples,
+		(AVSampleFormat)af->frame->format, 1);
+	if (!is->swr_ctx) {
+		is->swr_ctx = swr_alloc_set_opts(NULL,
+			AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_S16, is->audio_ctx->sample_rate,
+			av_get_default_channel_layout(is->audio_ctx->channels), is->audio_ctx->sample_fmt, is->audio_ctx->sample_rate,
+			0, NULL);
+		swr_init(is->swr_ctx);
 	}
+
 }
 
-void audio_callback(void *userdata, Uint8 *stream, int len) {
+void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
 
 	VideoState *is = (VideoState *)userdata;
 	int len1, audio_size;
@@ -442,6 +410,7 @@ static int audio_thread(void *arg)
 		}
 		avcodec_decode_audio4(is->audio_ctx, frame, &got_frame, pkt);
 		if (got_frame) {
+			af = frame_queue_peek_writable(&is->sampq);
 			av_frame_move_ref(af->frame, frame);
 			frame_queue_push(&is->sampq);
 		}
@@ -475,7 +444,7 @@ static int stream_component_open(VideoState *is, int stream_index)
 		wanted_spec.channels = avctx->channels;
 		wanted_spec.silence = 0;
 		wanted_spec.samples = SDL_AUDIO_BUFFER_SIZE;
-		wanted_spec.callback = audio_callback;
+		wanted_spec.callback = sdl_audio_callback;
 		wanted_spec.userdata = is;
 		if (SDL_OpenAudio(&wanted_spec, &spec) < 0) {
 			fprintf(stderr, "SDL_OpenAudio: %s\n", SDL_GetError());
