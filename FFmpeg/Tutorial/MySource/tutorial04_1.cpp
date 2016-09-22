@@ -67,7 +67,6 @@ typedef struct VideoState {
 	SDL_Thread *read_tid;
 	SDL_Thread *audio_tid;
 	SDL_Thread *video_tid;
-	int abort_request; /* 停止读包线程标志 */
 	AVFormatContext *ic;
 
 	FrameQueue pictq;
@@ -158,6 +157,7 @@ static int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
 			break;
 		}
 		else {
+			printf("waiting q->cond\n");
 			SDL_CondWait(q->cond, q->mutex);
 		}
 	}
@@ -265,9 +265,8 @@ void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
 			/* We have already sent all our data; get more */
 			audio_size = audio_decode_frame(is);
 			if (audio_size < 0) {
-				/* If error, output silence */
-				is->audio_buf_size = 1024;
-				memset(is->audio_buf, 0, is->audio_buf_size);
+				//TODO
+				/* if error, just output silence */
 			}
 			else {
 				is->audio_buf_size = audio_size;
@@ -283,15 +282,6 @@ void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
 		is->audio_buf_index += len1;
 	}
 }
-
-static Uint32 sdl_refresh_timer_cb(Uint32 interval, void *opaque) {
-	SDL_Event event;
-	event.type = FF_REFRESH_EVENT;
-	event.user.data1 = opaque;
-	SDL_PushEvent(&event);
-	return 0; /* 0 means stop timer */
-}
-
 
 void video_display(VideoState *is) {
 	SDL_Rect rect;
@@ -343,31 +333,31 @@ int video_thread(void *arg)
 
 
 	for (;;) {
+		printf("video:packet_queue_get()\n");
 		if (packet_queue_get(&is->videoq, pkt, 1) < 0) {
 			// means we quit getting packets
 			break;
 		}
 		// Decode video frame
+		printf("decode_video2()\n");
 		avcodec_decode_video2(is->video_ctx, frame, &got_frame, pkt);
 		// Did we get a video frame?
-		if (got_frame) {
+		if (got_frame) 
+		{
 			vp = frame_queue_peek_writable(&is->pictq);
-
 			if (!vp->bmp || !vp->allocated ||
 				vp->width != frame->width ||
-				vp->height != frame->height) {
+				vp->height != frame->height) 
+			{
 				SDL_Event event;
-
 				vp->allocated = 0;
 				vp->width = frame->width;
 				vp->height = frame->height;
-
 				/* the allocation must be done in the main thread to avoid
 				locking problems. */
 				event.type = FF_ALLOC_EVENT;
 				event.user.data1 = is;
 				SDL_PushEvent(&event);
-
 				/* wait until the picture is allocated */
 				SDL_LockMutex(is->pictq.mutex);
 				while (!vp->allocated) {
@@ -375,41 +365,33 @@ int video_thread(void *arg)
 				}
 				SDL_UnlockMutex(is->pictq.mutex);
 			}
-
 			/* if the frame is not skipped, then display it */
-			if (vp->bmp) {
+			if (vp->bmp) 
+			{
 				AVPicture pict = { { 0 } };
-
 				/* get a pointer on the bitmap */
 				SDL_LockYUVOverlay(vp->bmp);
-
 				pict.data[0] = vp->bmp->pixels[0];
 				pict.data[1] = vp->bmp->pixels[2];
 				pict.data[2] = vp->bmp->pixels[1];
-
 				pict.linesize[0] = vp->bmp->pitches[0];
 				pict.linesize[1] = vp->bmp->pitches[2];
 				pict.linesize[2] = vp->bmp->pitches[1];
-
 				is->img_convert_ctx = sws_getCachedContext(is->img_convert_ctx,
 					vp->width, vp->height, is->video_ctx->pix_fmt, vp->width, vp->height,
 					AV_PIX_FMT_YUV420P, SWS_BICUBIC, NULL, NULL, NULL);
-
 				sws_scale(is->img_convert_ctx, frame->data, frame->linesize,
 					0, vp->height, pict.data, pict.linesize);
-
 				SDL_UnlockYUVOverlay(vp->bmp);
-
 				/* 移动指针 */
 				frame_queue_push(&is->pictq);
-
 			}
 			av_free_packet(pkt);
 		}
-		av_frame_free(&frame);
-		return 0;
 	}
-
+	av_frame_free(&frame);
+	printf("video_thread exit\n");
+	return 0;
 }
 
 static int audio_thread(void *arg)
@@ -432,6 +414,7 @@ static int audio_thread(void *arg)
 		}
 	} while(1);
 	av_frame_free(&frame);
+	printf("audio_thread exit\n");
 	return 0;
 }
 
@@ -500,7 +483,7 @@ static int read_thread(void *arg)
 	is->ic = ic;
 
 	avformat_find_stream_info(ic, NULL);
-
+	
 	for (i = 0; i<ic->nb_streams; i++) 
 	{
 		if (ic->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO) 
@@ -524,7 +507,6 @@ static int read_thread(void *arg)
 		goto fail;
 	}
 
-
 	for (;;) {
 
 		/* if the queue are full, no need to read more */
@@ -539,7 +521,7 @@ static int read_thread(void *arg)
 		}
 		*/
 		if (av_read_frame(ic, pkt) < 0) {
-			break;
+			//break;
 		}
 		if (pkt->stream_index == is->audio_stream) {
 			packet_queue_put(&is->audioq, pkt);
@@ -550,10 +532,6 @@ static int read_thread(void *arg)
 		else {
 			av_free_packet(pkt);
 		}
-	}
-	/* wait until the end */
-	while (!is->abort_request) {
-		SDL_Delay(100);
 	}
 fail:
 	/* close each stream */
@@ -566,6 +544,7 @@ fail:
 	event.type = FF_QUIT_EVENT;
 	event.user.data1 = is;
 	SDL_PushEvent(&event);
+	printf("read_thread exit\n");
 	return 0;
 }
 
@@ -587,6 +566,7 @@ static void event_loop(VideoState *is)
 			exit(0);
 			break;
 		case FF_ALLOC_EVENT:
+			printf("alloc_picture\n");
 			alloc_picture(event.user.data1);
 			break;
 		default:
@@ -608,9 +588,9 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	SDL_EventState(SDL_ACTIVEEVENT, SDL_IGNORE);
-	SDL_EventState(SDL_SYSWMEVENT, SDL_IGNORE);
-	SDL_EventState(SDL_USEREVENT, SDL_IGNORE);
+
+	screen = SDL_SetVideoMode(640, 480, 0, 0);
+	screen_mutex = SDL_CreateMutex();
 
 	/* ffplay.c 把下述内容封装到了函数 stream_open() 里 */
 	is = (VideoState*)av_mallocz(sizeof(VideoState));
