@@ -157,7 +157,6 @@ static int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
 			break;
 		}
 		else {
-			printf("waiting q->cond:%x\n",&q->cond);
 			SDL_CondWait(q->cond, q->mutex);
 		}
 	}
@@ -296,6 +295,7 @@ void video_display(VideoState *is) {
 		SDL_DisplayYUVOverlay(vp->bmp, &rect);
 		SDL_UnlockMutex(screen_mutex);
 	}
+	frame_queue_next(&is->pictq);
 }
 
 
@@ -336,13 +336,11 @@ int video_thread(void *arg)
 
 
 	for (;;) {
-		printf("video:packet_queue_get()\n");
 		if (packet_queue_get(&is->videoq, pkt, 1) < 0) {
 			// means we quit getting packets
 			break;
 		}
 		// Decode video frame
-		printf("decode_video2()\n");
 		avcodec_decode_video2(is->video_ctx, frame, &got_frame, pkt);
 		// Did we get a video frame?
 		if (got_frame) 
@@ -393,7 +391,6 @@ int video_thread(void *arg)
 		}
 	}
 	av_frame_free(&frame);
-	printf("video_thread exit\n");
 	return 0;
 }
 
@@ -417,7 +414,6 @@ static int audio_thread(void *arg)
 		}
 	} while(1);
 	av_frame_free(&frame);
-	printf("audio_thread exit\n");
 	return 0;
 }
 
@@ -547,7 +543,6 @@ fail:
 	event.type = FF_QUIT_EVENT;
 	event.user.data1 = is;
 	SDL_PushEvent(&event);
-	printf("read_thread exit\n");
 	return 0;
 }
 
@@ -569,7 +564,6 @@ static void event_loop(VideoState *is)
 			exit(0);
 			break;
 		case FF_ALLOC_EVENT:
-			printf("alloc_picture\n");
 			alloc_picture(event.user.data1);
 			break;
 		default:
