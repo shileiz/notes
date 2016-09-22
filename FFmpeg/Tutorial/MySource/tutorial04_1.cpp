@@ -157,7 +157,7 @@ static int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
 			break;
 		}
 		else {
-			printf("waiting q->cond\n");
+			printf("waiting q->cond:%x\n",&q->cond);
 			SDL_CondWait(q->cond, q->mutex);
 		}
 	}
@@ -320,7 +320,10 @@ void alloc_picture(void *userdata) {
 
 	vp->width = is->video_ctx->width;
 	vp->height = is->video_ctx->height;
+	SDL_LockMutex(is->pictq.mutex);
 	vp->allocated = 1;
+	SDL_CondSignal(is->pictq.cond);
+	SDL_UnlockMutex(is->pictq.mutex);
 }
 
 int video_thread(void *arg)
@@ -454,8 +457,8 @@ static int stream_component_open(VideoState *is, int stream_index)
 		is->audio_stream = stream_index;
 		is->audio_st = ic->streams[stream_index];
 		is->audio_ctx = avctx;
-		is->audio_tid = SDL_CreateThread(audio_thread, is);
-		SDL_PauseAudio(0);
+//		is->audio_tid = SDL_CreateThread(audio_thread, is);
+//		SDL_PauseAudio(0);
 		break;
 	case AVMEDIA_TYPE_VIDEO:
 		is->video_stream = stream_index;
