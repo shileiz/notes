@@ -91,7 +91,6 @@ typedef struct VideoState {
 	/*ffplay.c把以下封装在了别的结构体里，比如Decoder*/
 	AVCodecContext *audio_ctx;
 	AVCodecContext *video_ctx;
-	AVPacket  audio_pkt;
 
 } VideoState;
 
@@ -141,11 +140,6 @@ static int packet_queue_get(PacketQueue *q, AVPacket *pkt, int block)
 	SDL_LockMutex(q->mutex);
 
 	for (;;) {
-
-		if (global_video_state->quit) {
-			ret = -1;
-			break;
-		}
 
 		pkt1 = q->first_pkt;
 		if (pkt1) {
@@ -209,6 +203,27 @@ static Frame *frame_queue_peek(FrameQueue *f)
 {
 	return &f->queue[(f->rindex) % f->max_size];
 }
+static Frame *frame_queue_peek_readable(FrameQueue *f)
+{
+	/* wait until we have a readable a new frame */
+	SDL_LockMutex(f->mutex);
+	while (f->size <= 0) {
+		SDL_CondWait(f->cond, f->mutex);
+	}
+	SDL_UnlockMutex(f->mutex);
+	return &f->queue[f->rindex % f->max_size];
+}
+static void frame_queue_next(FrameQueue *f)
+{
+	av_frame_unref(f->queue[f->rindex].frame);
+	if (++f->rindex == f->max_size)
+		f->rindex = 0;
+	SDL_LockMutex(f->mutex);
+	f->size--;
+	SDL_CondSignal(f->cond);
+	SDL_UnlockMutex(f->mutex);
+}
+
 
 /*
 * ZSL
@@ -219,12 +234,10 @@ static Frame *frame_queue_peek(FrameQueue *f)
 */
 int audio_decode_frame(VideoState *is) {
 
-	int data_size, resampled_data_size;
+	int resampled_data_size;
 	Frame *af;
-	
-	data_size = av_samples_get_buffer_size(NULL, av_frame_get_channels(af->frame),
-		af->frame->nb_samples,
-		(AVSampleFormat)af->frame->format, 1);
+	af = frame_queue_peek_readable(&is->sampq);
+	frame_queue_next(&is->sampq);
 	if (!is->swr_ctx) {
 		is->swr_ctx = swr_alloc_set_opts(NULL,
 			AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_S16, is->audio_ctx->sample_rate,
@@ -232,7 +245,14 @@ int audio_decode_frame(VideoState *is) {
 			0, NULL);
 		swr_init(is->swr_ctx);
 	}
-
+	const uint8_t **in = (const uint8_t **)af->frame->extended_data;
+	uint8_t **out = &is->audio_buf;
+	int out_size = av_samples_get_buffer_size(NULL, 2, af->frame->nb_samples, AV_SAMPLE_FMT_S16, 0);
+	int len2;
+	av_fast_malloc(&is->audio_buf, &is->audio_buf_size, out_size);
+	len2 = swr_convert(is->swr_ctx, out, af->frame->nb_samples, in, af->frame->nb_samples);
+	resampled_data_size = len2 * 2 * av_get_bytes_per_sample(AV_SAMPLE_FMT_S16);
+	return resampled_data_size;
 }
 
 void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
@@ -243,7 +263,7 @@ void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
 	while (len > 0) {
 		if (is->audio_buf_index >= is->audio_buf_size) {
 			/* We have already sent all our data; get more */
-			audio_size = audio_decode_frame(is, is->audio_buf, sizeof(is->audio_buf));
+			audio_size = audio_decode_frame(is);
 			if (audio_size < 0) {
 				/* If error, output silence */
 				is->audio_buf_size = 1024;
@@ -289,18 +309,16 @@ void video_display(VideoState *is) {
 }
 
 
-/*
-为写指针所在的VideoPicture（is->pictq[is->pictq_windex]）在堆空间分配一个 SDL_Overlay
-*/
+/* allocate a picture (needs to do that in main thread to avoid
+potential locking problems */
 void alloc_picture(void *userdata) {
-
 	VideoState *is = (VideoState *)userdata;
-	VideoPicture *vp;
-
-	vp = &is->pictq[is->pictq_windex];
+	Frame *vp;
+	vp = &is->pictq.queue[is->pictq.windex];
 	if (vp->bmp) {
 		// we already have one make another, bigger/smaller
 		SDL_FreeYUVOverlay(vp->bmp);
+		vp->bmp = NULL;
 	}
 	// Allocate a place to put our YUV image on that screen
 	SDL_LockMutex(screen_mutex);
@@ -313,10 +331,7 @@ void alloc_picture(void *userdata) {
 	vp->width = is->video_ctx->width;
 	vp->height = is->video_ctx->height;
 	vp->allocated = 1;
-
 }
-
-/* ------------------ */
 
 int video_thread(void *arg)
 {
@@ -403,7 +418,7 @@ static int audio_thread(void *arg)
 	AVFrame *frame = av_frame_alloc();
 	Frame *af;
 	int got_frame = 0;
-	AVPacket *pkt = &is->audio_pkt; /* 为什么不跟 video_thread 一样，用 AVPacket pkt1, *pkt = &pkt1; ？ audio_pkt一定要全局吗？ */
+	AVPacket pkt1, *pkt = &pkt1; 
 	do {
 		if (packet_queue_get(&is->audioq, pkt, 1) < 0) {
 			break;
@@ -413,6 +428,7 @@ static int audio_thread(void *arg)
 			af = frame_queue_peek_writable(&is->sampq);
 			av_frame_move_ref(af->frame, frame);
 			frame_queue_push(&is->sampq);
+			av_free_packet(pkt);
 		}
 	} while(1);
 	av_frame_free(&frame);
@@ -454,12 +470,14 @@ static int stream_component_open(VideoState *is, int stream_index)
 		is->audio_buf_index = 0;
 		is->audio_stream = stream_index;
 		is->audio_st = ic->streams[stream_index];
+		is->audio_ctx = avctx;
 		is->audio_tid = SDL_CreateThread(audio_thread, is);
 		SDL_PauseAudio(0);
 		break;
 	case AVMEDIA_TYPE_VIDEO:
 		is->video_stream = stream_index;
 		is->video_st = ic->streams[stream_index];
+		is->video_ctx = avctx;
 		is->video_tid = SDL_CreateThread(video_thread, is);
 		break;
 	default:
