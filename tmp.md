@@ -12,3 +12,13 @@
 	* 让 Eclipse 打开 .class 文件时使用 jad
 	* General--->Editors--->File Associations
 	* 把 .class 和 .class without source 都改成默认用 JadClipse 打开即可
+
+### Ubuntu 切换 jdk 版本
+* `sudo update-alternatives --config java`
+* `sudo update-alternatives --config javac`
+* 以上两条命令是以交互模式来更改 java 和 javac 的默认路径
+* 如果要以静默方式，用：`sudo update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java`
+* 以 set 代替 config，并且手写要设置的路径
+* 另外，sudo 要提示密码，还是需要交互，避免 sudo 密码引起的交互：
+* `echo "yourpassword" | sudo -S update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java`
+* 给 sudo 加个 -S 参数，使其静默。把密码通过 echo 管道传递给 sudo。
