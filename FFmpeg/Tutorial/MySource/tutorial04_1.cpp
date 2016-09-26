@@ -232,8 +232,7 @@ static void frame_queue_next(FrameQueue *f)
 *
 */
 int audio_decode_frame(VideoState *is) {
-	printf("audio_decode_frame()\n");
-	int resampled_data_size;
+	int resampled_data_size,out_size;
 	Frame *af;
 	af = frame_queue_peek_readable(&is->sampq);
 	frame_queue_next(&is->sampq);
@@ -246,10 +245,14 @@ int audio_decode_frame(VideoState *is) {
 	}
 	const uint8_t **in = (const uint8_t **)af->frame->extended_data;
 	uint8_t **out = &is->audio_buf;
-	int out_size = av_samples_get_buffer_size(NULL, 2, af->frame->nb_samples, AV_SAMPLE_FMT_S16, 0);
+	//out_size = av_samples_get_buffer_size(NULL, 2, af->frame->nb_samples, AV_SAMPLE_FMT_S16, 1);
+	out_size = 2 * 1152 * 2;
+	if (out_size < 0) { /*比如 af->frame->nb_samples==0 的时候，这必须要处理一下，不然一会儿 av_fast_malloc() 就出问题了 */
+		av_log(NULL, AV_LOG_ERROR, "av_samples_get_buffer_size() failed\n");
+		return -1;
+	}
 	int len2;
 	av_fast_malloc(&is->audio_buf, &is->audio_buf_size, out_size);
-	printf("  after av_fast_malloc(): is->audio_buf=%x,is->audio_buf_size=%d\n", is->audio_buf,is->audio_buf_size);
 	len2 = swr_convert(is->swr_ctx, out, af->frame->nb_samples, in, af->frame->nb_samples);
 	resampled_data_size = len2 * 2 * av_get_bytes_per_sample(AV_SAMPLE_FMT_S16);
 	return resampled_data_size;
@@ -259,7 +262,6 @@ void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
 	
 	VideoState *is = (VideoState *)userdata;
 	int len1, audio_size;
-	printf("sdl_audio_callback():len=%d,is->audio_buf_index=%d,is->audio_buf_size=%d\n", len, is->audio_buf_index, is->audio_buf_size);
 	while (len > 0) {
 		if (is->audio_buf_index >= is->audio_buf_size) {
 			/* We have already sent all our data; get more */

@@ -39,3 +39,12 @@
 #### PlaylistFetcher
 
 #### HTTPDownloader
+
+
+### NuPlayer 是怎么使用 LiveSession 的
+* NuPlayer 可以设置好多种 DataSource，HTTPLiveSource 是其中一种。NuPlayer 为每一种 DataSource 封装了类。
+* 其中，HTTPLiveSource 有一个 LiveSession 类型的成员： mLiveSession
+* NuPlayer 在 prepareAsync() 里调用了 mSource->prepareAsync()，对于 HTTPLiveSource 类型的 DataSource 来说，就是调用了 HTTPLiveSource 的 prepareAsync()
+* HTTPLiveSource 的 prepareAsync() 里 new 了一个 LiveSession 出来，保存到 HTTPLiveSource 的成员变量 mLiveSession 里
+* 并且，在 new 了之后，直接调用了 mLiveSession->connectAsync()
+* 一旦mLiveSession->connectAsync()，LiveSession 就会自己去下载 m3u8，然后一片一片的下载ts了
