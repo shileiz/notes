@@ -48,3 +48,13 @@
 * HTTPLiveSource 的 prepareAsync() 里 new 了一个 LiveSession 出来，保存到 HTTPLiveSource 的成员变量 mLiveSession 里
 * 并且，在 new 了之后，直接调用了 mLiveSession->connectAsync()
 * 一旦mLiveSession->connectAsync()，LiveSession 就会自己去下载 m3u8，然后一片一片的下载ts了
+
+#### ABuffer
+* ts 分片（m3u8可能也是）的实际数据封装在这个数据结构里
+* `frameworks/av/media/libstagefright/foundation/ABuffer.cpp`
+* `frameworks/av/include/media/stagefright/foundation/ABuffer.h`
+
+### EXT-X-DISCONTINUITY
+* AnotherPacketSource::getFormat()， 在自己的 mBuffers 里挨个 buffer（ABuffer类型）查看 mMeta（mMeta是ABuffer的成员，AMessage类型），如果该 buffer 的 mMeta 里有 discontinuity 属性，说明这个 buffer 里的 ts 格式可能发生变化了。
+* 此时要查一下这个 buffer 的 mMeta 里的 format（MetaData 类型），并把这个 format 设置给 mFormat。
+* 参考：[http://blog.csdn.net/haima1998/article/details/46791007](http://blog.csdn.net/haima1998/article/details/46791007)
