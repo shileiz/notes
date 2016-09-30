@@ -89,3 +89,11 @@
         STREAMTYPE_H264                 = 0x1b, 
         STREAMTYPE_AC3                  = 0x81,
         STREAMTYPE_LPCM_AC3             = 0x83,
+
+## Android 系统的 mpeg2ts 组件
+* 直接附上类图(其中 Program 和 Stream 都是 ATSParser 的内部类 )  
+
+![](android_mpeg2ts.jpg)
+
+
+![](android_mpeg2ts_another_packet_source.jpg)
