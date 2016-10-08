@@ -1,19 +1,16 @@
-##绑定服务
-
-####客户端
-* 客户端绑定Service，调用的是 `bindService(Intent intent, ServiceConnection conn, int flags)`
-* 绑的是哪个 Service 呢？ 通过第一个参数 intent 来告诉安卓OS
-* 绑定是个异步过程，客户端只告诉安卓OS，我要绑定这个 Service，具体什么时候绑好，需要回调
-	* 第二个参数 conn 负责回调，它是一个 ServiceConnection 类型的对象，ServiceConnection 是个接口
-	* 当 Service 绑定好了之后（Service 的 onBind() 返回了），安卓OS会回调 `conn.onServiceConnected(ComponentName name, IBinder service)`
-	* 安卓OS会在这个回调里，传来一个 IBinder 类型的对象（第二个参数）：service。它代表着 Service 提供给客户端的所有接口
-	* 客户端在得到这个 service 之后，就可以通过它调用 Service 里的方法了。 
-	* 疑问：为什么一个 IBinder 类型的对象 service 能调用到 Service 里的功能函数，不同的 Service 有不同的功能函数啊
-	* 答案：每个 Service 都要自己写一个类（比如叫 BnXXXService），继承自 IBinder，给这个类添加自己想暴露给客户端的业务函数，然后让安卓OS在回调里，把这个类的对象返回给客户端。
-	* 客户端在得到这个 IBinder 类型的 service 之后，首先把它强转成 Service 暴露给客户端的类型（比如，`BnXXXService bn = (BnXXXService) service`），就可以使用它了。比如 `bn.doSomething()`
-* 第三个参数 flags 一般用 `BIND_AUTO_CREATE` 即可。表示如果被绑定的Service还没启动，则安卓OS会自动启动它。
+##使用Service：同一进程
+* 同一进程内的情况比较简单，先看简单的，再看复杂的
+* 场景是：一个app内部，启动了一个 Service，本app的其他地方想使用这个 Service
+* 比如，你做了一个音乐播放 app，里面有一个 MusicService 负责后台播放音乐，对外提供 play()，pause() 的接口
+* 你在一个 Activity 里想调用这个 Service 的 play()，怎么搞？
+* 必须在这个 Activity 里拿到刚才启动的 MusicService 的实例，但这是不可能的。Service 实例是由安卓OS维护的，你拿不到。（启动 Service 可不是 new MusicService() new 出来的，而是调用安卓系统的 startService(),这个函数不给你返回被启动的Service实例）
+* 我们确实拿不到 MusicService 的实例，但是我们可以拿到它的“代理”——proxy。
+* 如何拿到这个代理？ Service 又是如何实现这个代理的（想让别人拿到你的proxy，作为MusicService，你必须提供一个proxy才行）？
+* 我们下面就分别看看客户端和服务端要怎么做。这里把使用Service的一端称为客户端，即我们的Activity；把提供Service的一端称为服务端，即MusicService。
 
 ####服务端
+* 作为一个 Service，肯定要有客户端来使用我，所以我要提供一个 proxy 让客户端来使用我。
+* 这个 proxy 
 * 服务端onBind()返回一个IBinder
 * 服务端返回给客户端的东西，首先必须是一个IBinder，这样安卓OS才能把它传递给客户端
 * 其次，这必须是个能调用服务端功能函数的东西，这是客户端绑定服务端的目的
@@ -21,6 +18,24 @@
 * 添加的所有业务函数，一般统一抽象出来封装到一个interface里，然后让返回给客户端的那个东西去实现该接口
 * 总之，onBind()返回的东西，一般是 extends IBinder implements XXXX
 * 客户端拿到这个返回的东西，会把它强转成 XXXX，然后调用其中的方法。
+
+####客户端
+* 客户端要调用 `bindService(Intent intent, ServiceConnection conn, int flags)`，去绑定要使用的 Service，才能获得Service的proxy，从而使用 Service 的功能。下面看一下这个函数：
+* 第一个参数 intent 指定要绑定的是哪个 Service，我们这里就是: `new Intent(this, MusicService.class);`
+	* 我们这里是直接使用了.class来new这个Intent，当然也可以使用别的方式。比如new一个无参的intent，再set包名类名，或者Action和Category之类的 
+	* 总之，跟启动Activity的intent一样，可以用显式的也可以用隐式的。如果用隐式的，需要在 Manifest 里给 Service 加 intent-filter。
+* 第二个参数 conn 非常重要，服务端给客户的返回的proxy就通过第二个参数获取
+	* 它是 ServiceConnection 类型的，ServiceConnection 是个接口
+	* 当 Service 绑定好了之后（Service 的 onBind() 返回了），安卓OS会回调 `conn.onServiceConnected(ComponentName name, IBinder service)`
+	* 安卓OS会在这个回调里，传来一个 IBinder 类型的对象（第二个参数）：service。它代表着 Service 提供给客户端的proxy
+	* 客户端在得到这个 service 之后，就可以通过它调用 Service 里的方法了。 
+	* 我们这里要自己 new 一个 ServiceConnection，而且不能用匿名对象，因为这个 conn 我们解绑的时候还要用
+	* 我们可以自己做一个 class MyConn，实现 ServiceConnection 接口。我们实现 onServiceConnected() 方法的时候，要把第二个参数 IBinder 保存出来，因为这是 Service 的代理，后续调用 Service 的方法全靠它。
+	* 注意：对我们客户端来说，我们从这个回调函数得到的，只是一个 IBinder，这东西并不能代表 MusicService，它并没有 play() 方法。
+	* 所以，我们必须保证 MusicService 绑定好之后，回调函数传回来的这个 IBinder 不仅仅是个 IBinder，还要？？？？？？？？？
+* 第三个参数 flags 一般用 `BIND_AUTO_CREATE` 即可。表示如果被绑定的Service还没启动，则安卓OS会自动启动它。
+
+##使用Service：跨进程
 
 ####跨进程的问题
 * 如果Service和客户端运行在不同的程序中，比如Service是支付宝，客户端是你写的app
