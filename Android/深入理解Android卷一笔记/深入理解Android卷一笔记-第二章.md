@@ -86,7 +86,7 @@
 
 #### get和setJava层的field
 1. 通过 `jclass clazz = env->FindClass("含有路径的类名");` 找到类
-2. 通过 `jfieldID fid = env->GetFieldID(clazz,"成员名","成员签名信息");`找到Java层成员变量的ID
+2. 通过 `jfieldID fid = env->GetFieldID(clazz,"成员名","成员类型标示");`找到Java层成员变量的ID
 3. 通过 `GetxxxField(env,obj,fid);` / `SetxxxField(env,obj,fid,value);` 来get/set相应的成员变量
 
 ### JNI层的jstring要手动释放，这和jstring内部实现有关
@@ -94,3 +94,11 @@
 * 用 `jstring javaString = env->NewStringUTF(const char* cString)` 能从C语言的字符串得到jstring的类型
 * 以上两种方法调用之后，都要调用 `env->ReleaseStringUTFChars(jstring javaString, char* cString) `来释放
 * 否则会导致JVM内存泄露
+
+### JNI类型签名
+* Java 类型对应到 C/C++ 里都有个对应的**类型标示**。 比如 Java 的 long，在C/C++里用 "J" 做类型标示。
+* 函数签名信息的格式是：
+
+		(参数1类型标示参数2类型标示...参数n类型标示)返回值类型标示
+
+* 可以用 javap 工具生成函数签名信息
