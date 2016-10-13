@@ -2,7 +2,9 @@
 * 这个代表java的虚拟机。所有的工作都是从获取虚拟机的接口开始的。
 
 #####第一种方式
-* 在加载动态链接库的时候，JVM会调用JNI_OnLoad(JavaVM* jvm, void* reserved)（如果定义了该函数）。第一个参数会传入JavaVM指针。
+* 在加载 Native 库的时候，JVM 会去被加载的库中寻找函数`JNI_OnLoad(JavaVM* jvm, void* reserved)`，如果找到了就调用它。
+* 注意这个函数的第一个参数是 JavaVM* 类型的。而普通的 Native 函数的第一个参数都是 JNIEnv* 类型的。这几乎是整个 Native so 库唯一一次获得 JVM 指针的机会。
+* 所以一般正经的 Native Code 的 jni 层，都会实现 `JNI_OnLoad()` 函数，并且在函数里用全局变量把 JavaVM* 保存下来，以便以后使用。
 
 #####第二种方式
 * 在native code中调用JNI_CreateJavaVM(&jvm, (void)&env, &vm_args)可以得到JavaVM指针。
@@ -11,11 +13,11 @@
 * Android系统是利用第二种方式Invocation interface来创建JVM的。
 
 ---
+* 可以不准确的理解为：一个 Android app 就是一个 Android Linux 上的进程
+* 在Android里，可以简单的理解为：一个进程对应一个Dalvik虚拟机。Java的dex字节码和c/c++的so库同时运行Dalvik虚拟机之内，共同使用一个进程空间。
+* Dalvik 虚拟机当然已经实现了JNI标准，所以在Dalvik虚拟机加载so库时，会先调用JNI_Onload()
 
-* 在java里，每一个process可以产生多个java vm对象，但是在android上，每一个process只有一个Dalvik虚拟机对象
-* 
-
-Java 的dex字节码和c/c++的*.so同时运行Dalvik虚拟机之内，共同使用一个进程空间。之所以可以相互调用，也是因为有Dalvik虚拟机。当java 代码需要c/c++代码时，在Dalvik虚拟机加载进*.so库时，会先调用JNI_Onload(),此时就会把JAVA VM对象的指针存储于c层jni组件的全局环境中，在Java层调用C层的本地函数时，调用c本地函数的线程必然通过Dalvik虚拟机来调用c层的本地函数，此时，Dalvik虚拟机会为本地的C组件实例化一个JNIEnv指针，该指针指向Dalvik虚拟机的具体的函数列表，当JNI的c组件调用Java层的方法或者属性时，需要通过JNIEnv指针来进行调用。  当本地c/c++想获得当前线程所要使用的JNIEnv时，可以使用Dalvik虚拟机对象的JavaVM* jvm->GetEnv()返回当前线程所在的JNIEnv*。
+当java 代码需要c/c++代码时，,此时就会把JAVA VM对象的指针存储于c层jni组件的全局环境中，在Java层调用C层的本地函数时，调用c本地函数的线程必然通过Dalvik虚拟机来调用c层的本地函数，此时，Dalvik虚拟机会为本地的C组件实例化一个JNIEnv指针，该指针指向Dalvik虚拟机的具体的函数列表，当JNI的c组件调用Java层的方法或者属性时，需要通过JNIEnv指针来进行调用。  当本地c/c++想获得当前线程所要使用的JNIEnv时，可以使用Dalvik虚拟机对象的JavaVM* jvm->GetEnv()返回当前线程所在的JNIEnv*。
 
 ---
 
