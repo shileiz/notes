@@ -1,7 +1,7 @@
 ###JNI 的在官方在线文档：
 
 
-> http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/jniTOC.html
+> [http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/jniTOC.html](http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/jniTOC.html)
 
 ### JavaVM 是进程相关的，JNIEnv 是线程相关的
 * 在 Android 里，每个进程只有一个 JavaVM（DalvikVM） 的实例
