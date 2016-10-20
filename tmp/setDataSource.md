@@ -67,6 +67,86 @@
 		    return err;
 		}
 
-*  `const sp<IMediaPlayerService>& service(getMediaPlayerService());` 这句话就是定义了一个 `const sp<IMediaPlayerService>&` 类型的变量 service，并赋初值为 getMediaPlayerService() 的返回值。
-*  我们暂且不去看 getMediaPlayerService() 的实现，认为这个函数就是从 ServiceManager 那里获取到了 MediaPlayerService。
-*  `sp<IMediaPlayer> player(service->create(this, mAudioSessionId));` 我们需要看一下 MediaPlayerService 的 create() 函数。
+*  `const sp<IMediaPlayerService>& service(getMediaPlayerService());` 这句话就是定义了一个 `const sp<IMediaPlayerService>&` 类型的变量 service，并赋值为 getMediaPlayerService() 的返回值。
+*  我们暂且不去看 getMediaPlayerService() 的实现，这个函数就是从 ServiceManager 那里获取到了 BpMediaPlayerService。(详见《深入理解Android卷1-第6章-6.4节》)
+*  `sp<IMediaPlayer> player(service->create(this, mAudioSessionId));` 这句话定义了一个 sp<IMediaPlayer> 类型的变量 player，并赋值为 `service->create(this, mAudioSessionId)` 的返回值。 
+* 我们研究一下这个 `service->create(this, mAudioSessionId)`，它是 BpMediaPlayerService 类的成员函数，其原型为：
+
+		virtual sp<IMediaPlayer> create(const sp<IMediaPlayerClient>& client, int audioSessionId) 
+
+* 第一个参数是 IMediaPlayerClient 类型的指针，我们这里传的是 this，即 C++ 的 MediaPlayer 对象 mp。 因为 MediaPlayer 继承自 BnMediaPlayerClient，而 BnMediaPlayerClient 继承自 IMediaPlayerClient。 
+* 第二个参数是 int 型的 audioSessionId，我们这里传的是 mAudioSessionId。 我们当年在 new MediaPlayer 时，给它赋初值了吗？看下构造函数里：
+
+		mAudioSessionId = AudioSystem::newAudioUniqueId();
+
+* 确实是给了一个初值，具体什么用先不去管他。
+* 返回值是 sp<IMediaPlayer> 类型的。 
+* 这会被 Binder 跨进程的送给 MediaPlayerService 来处理，最终是由 MediaPlayerService 的 create() 干活
+
+###传送门：具体怎么跨进程从app进程走到 mediaserver 进程，交给 MediaPlayerService 处理的
+* 我们这里是调用 BpMediaPlayerService 的 create()，看一下它的实现（frameworks/av/media/libmedia/IMediaPlayerService.cpp）
+
+		virtual sp<IMediaPlayer> create(
+		        const sp<IMediaPlayerClient>& client, int audioSessionId) {
+		    Parcel data, reply;
+		    data.writeInterfaceToken(IMediaPlayerService::getInterfaceDescriptor());
+		    data.writeStrongBinder(IInterface::asBinder(client));
+		    data.writeInt32(audioSessionId);
+		
+		    remote()->transact(CREATE, data, &reply);
+		    return interface_cast<IMediaPlayer>(reply.readStrongBinder());
+		}
+
+
+* 我们需要看一下 MediaPlayerService 的 create() 函数（位于：`frameworks/av/media/libmediaplayerservice/MediaPlayerService.cpp` ）。
+
+		sp<IMediaPlayer> MediaPlayerService::create(const sp<IMediaPlayerClient>& client,
+		        int audioSessionId)
+		{
+		    pid_t pid = IPCThreadState::self()->getCallingPid();
+		    int32_t connId = android_atomic_inc(&mNextConnId);
+		
+		    sp<Client> c = new Client(
+		            this, pid, connId, client, audioSessionId,
+		            IPCThreadState::self()->getCallingUid());
+		
+		    ALOGV("Create new client(%d) from pid %d, uid %d, ", connId, pid,
+		         IPCThreadState::self()->getCallingUid());
+		
+		    wp<Client> w = c;
+		    {
+		        Mutex::Autolock lock(mLock);
+		        mClients.add(w);
+		    }
+		    return c;
+		}
+
+* 实际上就是 new 了一个 Client 并把它 return 出去了。 Client 是啥？
+* Client 是 MediaPlayerService 的内部类，它继承自 BnMediaPlayer（注意：不是BnMediaPlayerClient），BnMediaPlayer 继承自 IMediaPlayer（注意，不是IMediaPlayerClient），Client 的定义也在 MediaPlayerService.h:
+
+		class Client : public BnMediaPlayer {...}
+
+* Client 的构造函数在 MediaPlayerServi.cpp 实现，我们来看一下：
+
+		MediaPlayerService::Client::Client(
+		        const sp<MediaPlayerService>& service, pid_t pid,
+		        int32_t connId, const sp<IMediaPlayerClient>& client,
+		        int audioSessionId, uid_t uid)
+		{
+		    ALOGV("Client(%d) constructor", connId);
+		    mPid = pid;
+		    mConnId = connId;
+		    mService = service;
+		    mClient = client;
+		    mLoop = false;
+		    mStatus = NO_INIT;
+		    mAudioSessionId = audioSessionId;
+		    mUID = uid;
+		    mRetransmitEndpointValid = false;
+		    mAudioAttributes = NULL;
+		
+		#if CALLBACK_ANTAGONIZER
+		    ALOGD("create Antagonizer");
+		    mAntagonizer = new Antagonizer(notify, this);
+		#endif
+		}
