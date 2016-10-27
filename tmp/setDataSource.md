@@ -129,7 +129,7 @@
 * app 进程会从 reply 里拿到 mediaserver 进程返回的 player，当然还是先读出 Binder 再强转：`interface_cast<IMediaPlayer>(reply.readStrongBinder())`
 
 * app 进程想从 mediaserver 进程拿到的是一个 `sp<IMediaPlayer>` ，但由于是跨进程的，操作系统只能给 app 进程一个 IBinder。app 进程拿到 IBinder 后需要自己转。用 `interface_cast<IMediaPlayer>(IBinder remote)` 转。
-* 
+* `interface_cast<IMediaPlayer>(IBinder remote)`  实际上就是 new 了一个 BpMediaPlayer 出来，并用 IBinder remote 构造的这个 BpMediaPlayer。这个 remote 最终会成为其成员变量 mRemote 的值。
 
 
 ####真正干活的 create()
@@ -201,20 +201,44 @@
 * 其中的 `doSetRetransmitEndpoint(player)` 我们先不看（这是 MediaPlayer 类的成员函数，别忘了，我们目前还在 `mp->setDataSource(fd, offset, length)` 里面，它直接调用的都是 mp 的成员函数。），不看它并不影响我们的主线思路。
 
 #####1.player->setDataSource(fd, offset, length)
+* 首先，这个 setDataSource(fd, offset, length) 是 BpMediaPlayer 的方法，因为 player 是一个 BpMediaPlayer。其实现如下（IMediaPlayer.cpp）：
 
-	status_t MediaPlayerService::Client::setDataSource(int fd, int64_t offset, int64_t length)
-	{
-		...
-	    player_type playerType = MediaPlayerFactory::getPlayerType(this,fd,offset,length);  // 1). 
-	    sp<MediaPlayerBase> p = setDataSource_pre(playerType);  // 2). 
-	    if (p == NULL) {
-	        return NO_INIT;
-	    }
-	
-	    // now set data source
-	    setDataSource_post(p, p->setDataSource(fd, offset, length)); // 3).
-	    return mStatus;
-	}
+		status_t setDataSource(int fd, int64_t offset, int64_t length) {
+		    Parcel data, reply;
+		    data.writeInterfaceToken(IMediaPlayer::getInterfaceDescriptor());
+		    data.writeFileDescriptor(fd);
+		    data.writeInt64(offset);
+		    data.writeInt64(length);
+		    remote()->transact(SET_DATA_SOURCE_FD, data, &reply);
+		    return reply.readInt32();
+		}
+
+* 果然，是给远端进程发了个 `SET_DATA_SOURCE_FD` 消息。看看 BnMediaPlayer 的 onTransact() 吧，不出意料的话应该是分发给 BnMediaPlayer::Client 的 setDataSource() 处理：
+
+        case SET_DATA_SOURCE_FD: {
+            CHECK_INTERFACE(IMediaPlayer, data, reply);
+            int fd = data.readFileDescriptor();
+            int64_t offset = data.readInt64();
+            int64_t length = data.readInt64();
+            reply->writeInt32(setDataSource(fd, offset, length)); //BnMediaPlayer 没有实现setDataSource()方法，是其子类Client实现的。
+            return NO_ERROR;
+        }
+
+* BnMediaPlayer::Client setDataSource() 的实现。 注意 Client 虽然是 BnMediaPlayer 的子类，但它是在 MediaPlayerService.cpp 里实现的，并非跟 BnMediaPlayer 一起。
+
+		status_t MediaPlayerService::Client::setDataSource(int fd, int64_t offset, int64_t length)
+		{
+			...
+		    player_type playerType = MediaPlayerFactory::getPlayerType(this,fd,offset,length);  // 1). 
+		    sp<MediaPlayerBase> p = setDataSource_pre(playerType);  // 2). 
+		    if (p == NULL) {
+		        return NO_INIT;
+		    }
+		
+		    // now set data source
+		    setDataSource_post(p, p->setDataSource(fd, offset, length)); // 3).
+		    return mStatus;
+		}
 
 ##### 1). MediaPlayerFactory::getPlayerType(this,fd,offset,length)
 * 文件位置：`av/media/libmediaplayerservice/MediaPlayerFactory.h`， `av/media/libmediaplayerservice/MediaPlayerFactory.cpp`
