@@ -24,7 +24,7 @@
 
 ###解决方法
 * 先把手机用 `adb enable-verity` 改成开启 verity 状态
-* 虽然这时候 reboot 之后会导致进不了系统（比较 verity 会通不过么，因为我们往 /system 里推过库），但是不必理会
+* 虽然这时候 reboot 之后会导致进不了系统（毕竟 verity 会通不过么，因为我们往 /system 里推过库），但是不必理会
 * 这时候刷上新系统，手机仍然进不了系统，不必理会。
 * 此时是可以 adb 的。直接 `adb disable-verity`，重启
 * OK 了，可以正常进系统了。

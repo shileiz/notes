@@ -121,7 +121,7 @@
 				...
 		}
 
-* 所以，BpMediaPlayerService 的 creat() 最终返回的是从 BnMediaPlayerService 处得到的  sp<IMediaPlayer> 类型的一个 player，该 player 是由 MediaPlayerService 的 create() 函数返回的:`sp<IMediaPlayer> player = create(client, audioSessionId)`,这句话调用的 create()。
+* 所以，BpMediaPlayerService 的 creat() 最终返回的是从 BnMediaPlayerService 处得到的  `sp<IMediaPlayer>` 类型的一个 player，该 player 是由 MediaPlayerService 的 create() 函数返回的:`sp<IMediaPlayer> player = create(client, audioSessionId)`,这句话调用的 create()。
 
 ####再看Binder
 * app 进程给 mediaserver 进程发业务请求：`BpMediaPlayerService.create(client, audioSessionId)`，为了把 client 这个对象发到 mediaserver 进程，把 client 转成了 Binder：`IInterface::asBinder(client)`，然后写到 data 里：`data.writeStrongBinder(IInterface::asBinder(client))`，最后把 data 发给远端进程 mediaserver：`remote()->transact(CREATE, data, &reply);`
@@ -335,5 +335,33 @@
 * Client 有个成员变量，叫 mPlayer，是 MediaPlayerBase 类型的。
 
 ##### 3). setDataSource_post(p, p->setDataSource(fd, offset, length))
-#####2.player.clear();
-#####3.attachNewPlayer(player)
+* 如下：
+
+		void MediaPlayerService::Client::setDataSource_post(const sp<MediaPlayerBase>& p, status_t status)
+		{
+		    ALOGV(" setDataSource");
+		    mStatus = status;
+		    if (mStatus != OK) {
+		        ALOGE("  error: %d", mStatus);
+		        return;
+		    }
+		
+		    // Set the re-transmission endpoint if one was chosen.
+		    if (mRetransmitEndpointValid) {
+		        mStatus = p->setRetransmitEndpoint(&mRetransmitEndpoint);
+		        if (mStatus != NO_ERROR) {
+		            ALOGE("setRetransmitEndpoint error: %d", mStatus);
+		        }
+		    }
+		
+		    if (mStatus == OK) {
+		        mPlayer = p;
+		    }
+		}
+
+* 其中 `p->setDataSource(fd, offset, length)` 是真正干活的，是 NuPlayerDriver 的函数，就不看了。
+
+#####2.attachNewPlayer(player)
+* 核心的一句话： `mPlayer = player;`
+* 核心的作用就是把自己的 mPlayer 设置为 player
+* 顺带把原来的 mPlayer 给 disconnect() 掉。
