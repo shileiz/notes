@@ -164,6 +164,9 @@
 
 * 注意 C++ 的 MediaPlayer 类是 native 层的东西，它完全不知道有 Java 层的存在。
 
+![](after_new_MediaPlayer.png)
+
+
 #####2.new 了一个 JNIMediaPlayerListener，set 给了 mp
 * JNIMediaPlayerListener 类在 android_media_MediaPlayer.cpp 里定义并实现。这是一个 JNI 层的类，所以写在 JNI 层源文件里。
 * 它继承自 MediaPlayerListener，这是一个 native 层的类。这里就体现出了 JNI 层的意义： 他连接了 native 层和 Java 层。

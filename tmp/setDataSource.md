@@ -1,20 +1,15 @@
+##Java层的 setDataSource 会走到哪个 native 函数
 * java 层的 setDataSource() 有5个重载，我们只看其中这一个：`setDataSource(String path)`
 * 它会先走到重载的 `setDataSource(path, null, null)`, 然后在这里有个分叉
 
-	1. 如果 path 是 file，则走到
-	
-			setDataSource(FileDescriptor fd_from_path);
+	1. 如果 path 是 file，则走到 `setDataSource(FileDescriptor fd_from_path);` ，最终会调用 native 方法： `private native void _setDataSource(FileDescriptor fd, long offset, long length)`
 
-	2. 如果 path 不是 file 而是 http/rtsp，则走到
-	
-			nativeSetDataSource(
-				MediaHTTPService.createHttpServiceBinderIfNecessary(path), 
-				path, null, null);
+	2. 如果 path 不是 file 而是 http/rtsp，则走到 `nativeSetDataSource(MediaHTTPService.createHttpServiceBinderIfNecessary(path), path, null, null);`
 	
 * 我们这里只看是 file 的情况，不是 file 的，我们在另外一篇单看。
 
-##file 的 setDataSource
-* java 层的 `setDataSource(FileDescriptor fd)` 最终会调用 native 方法： `private native void _setDataSource(FileDescriptor fd, long offset, long length)`
+##native 的 setDataSource()
+* 对应 file，会走到的 native 函数是： `private native void _setDataSource(FileDescriptor fd, long offset, long length)`。 它在JNI层的实现是 `android_media_MediaPlayer_setDataSourceFD(env,thiz,fd,offset,length)`
 * 因为我们没有传 offset 和 length（我们只传了一个 path，java层根据这个 path 生成了 fd），java 层把 offset 设成了 0，length 设成了 0x7ffffffffffffffL —— 一个巨大的数。
 * 下面来看这个 native 方法。
 
@@ -36,17 +31,26 @@
 		    process_media_player_call( env, thiz, mp->setDataSource(fd, offset, length), "java/io/IOException", "setDataSourceFD failed." ); // 2.
 		}
 
-####1. mp = getMediaPlayer()
+####1. mp = getMediaPlayer() 
 * 上来是个 getMediaPlayer()，这个函数没什么，就是从 java 的 mp 对象里拿到它的 mNativeContext 的值，强转成(MediaPlayer*)类型，返回。
 * 这跟我们之前分析过的 setMediaPlayer() 呼应。 
 * Java MediaPlayer 的 mNativeContext 成员，就是用来保存 C++ MediaPlayer 对象的指针的。
 * C++ 把 Java **类** MediaPlayer 的成员 mNativeContext **的 ID** 存在 fields.context 里。 Java mediaplayer **对象**的 mNativeContext 的值，对应 C++ mediaplayer **对象**的指针。
 * 这里我们 getMediaPlayer() 得到的就是之前在 native_setup() 时（java 层 new MediaPlayer 会走到） new 出来的那个 C++ 的 MediaPlayer。 
-* 接下来有用的代码是这一行：`process_media_player_call( env, thiz, mp->setDataSource(fd, offset, length), "java/io/IOException", "setDataSourceFD failed." );`
-* 外面包的这层 `process_media_player_call()` 应该是跟 java 层交互的，先不展开看，不影响主线思路。我们只看里面的 `mp->setDataSource(fd, offset, length)`
+
+![](1.getMediaPlayer.png)
 
 ####2. mp->setDataSource(fd, offset, length)
-* 我们先看 `mp->setDataSource(fd, offset, length)`，这是 C++ 类 MediaPlayer 的函数，先看其原型（frameworks/av/include/media/mediaplayer.h），并不是虚函数：
+* 接下来有用的代码是这一行：`process_media_player_call( env, thiz, mp->setDataSource(fd, offset, length), "java/io/IOException", "setDataSourceFD failed." );`
+* 外面包的这层 `process_media_player_call()` 应该是跟 java 层交互的，先不展开看，不影响主线思路。我们只看里面的 `mp->setDataSource(fd, offset, length)`
+* 这个函数干了很多很多的事情。它执行完之后，在另外一个进程 mediaserver 里，创建了真正干活的 player。先看一下这个函数执行完的效果，我们再详细的看这个函数。
+
+![](2.after-setDataSource.png)
+
+
+##mp->setDataSource(fd, offset, length) 详细展开
+* 首先要记住，我们现在分析的是 app 进程里的，C++ 类 MediaPlayer 对象 mp 的 setDataSource() 函数。
+* 我们先看 `mp->setDataSource(fd, offset, length)`的原型（frameworks/av/include/media/mediaplayer.h），并不是虚函数：
 
 		status_t  setDataSource(int fd, int64_t offset, int64_t length); 
 
@@ -56,31 +60,76 @@
 		{
 		    ALOGV("setDataSource(%d, %" PRId64 ", %" PRId64 ")", fd, offset, length);
 		    status_t err = UNKNOWN_ERROR;
-		    const sp<IMediaPlayerService>& service(getMediaPlayerService());  // (1).
+		    const sp<IMediaPlayerService>& service(getMediaPlayerService());  // (0).
 		    if (service != 0) {
-		        sp<IMediaPlayer> player(service->create(this, mAudioSessionId)); // (2).
+		        sp<IMediaPlayer> player(service->create(this, mAudioSessionId)); // (1).
 		        if ((NO_ERROR != doSetRetransmitEndpoint(player)) ||
-		            (NO_ERROR != player->setDataSource(fd, offset, length))) {
-		            player.clear();
-		        }
-		        err = attachNewPlayer(player);
+		            (NO_ERROR != player->setDataSource(fd, offset, length)    // (2).
+					)) 
+					{
+			            player.clear();
+			        }
+		        err = attachNewPlayer(player);  // (3).
 		    }
 		    return err;
 		}
 
-* 这个函数虽然不长，但需要仔细分析
+* 其中最关键的4个点即注释中的 (0) ~ (3)，它各自的作用见下图：
 
-####2.(1). `const sp<IMediaPlayerService>& service(getMediaPlayerService())`
+![](3.setDataSource_zhankai.png)
 
-* 这句话就是定义了一个 `const sp<IMediaPlayerService>&` 类型的变量 service，并赋值为 getMediaPlayerService() 的返回值。
-* 我们暂且不去看 getMediaPlayerService() 的实现，这个函数就是从 ServiceManager 那里获取到了 BpMediaPlayerService。(详见《深入理解Android卷1-第6章-6.4节》)
-* 我们只需要记住，service 是一个 BpMediaPlayerService 即可。
+* (0). 用 service 建立了 app 进程和 mediaserver 进程的联系
+* (1). 用 service 向 mediaserver 进程发送了 create 命令，得到了一个 player。player 实际上代表着 mediaserver 进程里的一个对象。
+* (2). 用 player 向 mediaserver 进程发送 setDataSource 命令，致使 mediaserver 进程干了一些 setDataSource 的活，干完之后，mediaserver 进程里才真正有了 NuPlayer。
+* (3). 把 player 保存到 mp 的 mPlayer 成员里。
+* 下面逐条详细展开看。
 
-####2.(2). `sp<IMediaPlayer> player(service->create(this, mAudioSessionId))`
+####(0). `const sp<IMediaPlayerService>& service(getMediaPlayerService())`
+
+* 这句话定义了一个 `sp<IMediaPlayerService>&` 类型的变量 service，并赋值为 getMediaPlayerService() 的返回值。
+* getMediaPlayerService() 我们不展开一行一行的看，它从 ServiceManager 那里获取到了一个 BpMediaPlayerService。
+* 对于 app 进程来说 ServiceManager 是另外一个进程，所以这是一次跨进程通信。我们借此来看一下 Android 典型的基于 Binder 的进程间通信。
+* getMediaPlayerService() 中的几个重要步骤如下：
+	1. `sp<IServiceManager> sm = defaultServiceManager() ` 得到 BpServiceManager sm。defaultServiceManager() 是 Android binder 系统提供的一个函数（IServiceManager.h/.cpp），它不需要参数，返回一个 BpServiceManager。至于BpXXX是什么意思，现在只需要知道其中有个成员变量 mRemote 能代表另外一个进程里的某个服务即可。后续我们再详细分析。
+	
+		![](defaultServiceManager.png)
+
+	2. `sp<IBinder> binder = sm->getService(String16("media.player")) `，从 ServiceManager 那里取得 MediaPlayerService。**注意，因为 MediaPlayerService 是另外一个进程里的对象，所以你拿到的只能是 IBinder。**
+
+		![](getservice_media.player.png)
+
+	3. 最后 `return interface_cast<IMediaPlayerService>(binder) `，`interface_cast`是个模板函数（IInterface.h）：
+	
+
+					template<typename INTERFACE>
+					inline sp<INTERFACE> interface_cast(constsp<IBinder>& obj)
+					{
+					    return INTERFACE::asInterface(obj);
+					}
+		
+		所以最后 return 的是 `IMediaPlayerService::asInterface(binder)`。 而 asInterface() 又是由宏 `IMPLEMENT_META_INTERFACE` 实现的，宏展开后，相当于 return 了 new BpMediaPlayerService(binder)。而 BpMediaPlayerService 的构造函数一路调用父类的构造函数，最终使得其 mRemote = binder。  
+		**总之，我们用上一步中得到的 binder，new 了一个指向远端进程的 BpMediaPlayerService。**
+
+		![](after_iterfacecast.png)
+		
+
+* 再看 BpXXX
+	* BpXXX 一方面肩负着指向远端进程的任务：BpMediaPlayerService 要能指向远端进程的 MediaPlayerService 对象，所以其必须有个成员变量 mRemote，是 IBinder* 类型的，这继承自 BpRefBase。
+	* 另一方面肩负着调用业务函数的任务：BpMediaPlayerService 要能调用 MediaPlayerService 的业务函数 create() 等等，这继承自 IMediaPlayerService。
+	* 所以说 BpXXX 一般继承自 BpRefBase 和 IXXX，Android 为我们准备好了这一切，它搞了个模板类 `BpInterface<INTERFACE>` ，它继承自 BpRefBase 和 INTERFACE。所以我们的 BpXXX 直接从 BpInterface<IXXX> 继承即可。
+
+		![](BpInterface.png)
+
+* 以上是 Android 跨进程通信的一般套路：
+	1. 得到对端进程的代理BpXXX，上例中对端进程是 ServiceManager，直接使用 Android 为我们提供的 `defaultServiceManager()` 即可得到 BpServiceManager。
+	2. 用这个代理向对端进程发命令，使用起来十分方便，就像直接调用业务函数一样：`sm->getService(String16("media.player"))`
+	3. 把对端进程返回的结果转成
+
+####(2). `sp<IMediaPlayer> player(service->create(this, mAudioSessionId))`
 
 * 这句话定义了一个 `sp<IMediaPlayer>` 类型的变量 player，并赋值为 `service->create(this, mAudioSessionId)` 的返回值。 
 
-#### 2.(2).1. `service->create(this, mAudioSessionId)`
+#### (2).1. `service->create(this, mAudioSessionId)`
 
 * 我们研究一下这个 `service->create(this, mAudioSessionId)`，它是 BpMediaPlayerService 类的成员函数，其原型为：
 
