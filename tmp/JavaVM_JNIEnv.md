@@ -84,3 +84,42 @@
 * 这个函数能创建一个 JVM 对象，该对象肯定也是活在我们的 Native 进程里的。
 * 这个函数中创建 JVM 的同时，把 JNIEnv 也返回给我们了，即第二个参数。
 * 我们拿着 JNIEnv 就可以随便搞了，像获取 Java 类，获取 methodID，调用 java method 的什么的，都不是新鲜事了。
+
+---
+
+### 再看JNI
+
+#### C 和 C++ jni 层函数的区别
+* jni层函数的第一个参数都是 JNIEnv* env， 无论C还是C++
+* 但是这个 JNIEnv 对于C和C++是不同的，看一下 jni.h 中的定义：
+
+		#if defined(__cplusplus)
+		/* 在C++中，JNIEnv 等同于 _JNIEnv，而_JNIEnv是一个结构体，一会儿下面会有代码 */
+		typedef _JNIEnv JNIEnv;     
+		typedef _JavaVM JavaVM;
+		#else
+		/* 在C语言中，JNIEnv 是个指向结构体的指针，指向的是 JNINativeInterface 类型的结构体 */
+		typedef const struct JNINativeInterface* JNIEnv;   
+		typedef const struct JNIInvokeInterface* JavaVM;
+		#endif
+		
+		...
+
+		struct JNINativeInterface {... // 里面定义的全是函数指针 }
+
+		...
+
+		struct _JNIEnv { // 里面定义的全是函数指针 }
+
+* 即，对于C语言，env是一个二级指针，(*env)才是指向了封装了那么多个桥梁函数的结构体的结构体指针
+* 对于C++而言，env是一个一级指针，env本身就是指向了封装了那么多个桥梁函数的结构体的结构体指针
+* 所以，jni层，如果是.c文件，则内部用 `(*env)->xxxxx` 来引用桥梁函数
+* 如果是 .cpp 文件，则内部用 `env->xxxxx` 来引用桥梁函数
+
+##### jni层(C/C++语言)所有函数的第一个参数都是 JNIEnv* 型变量，是指向 JNIEnv 的指针
+##### JNIEnv 这个结构体里，全都是函数指针，一共有300个左右。
+1. jni 层的函数是被 java 层调用的，所以参数是 java 层传过来的
+2. 这第一个参数 JNIEnv* 是 java 虚拟机传的
+3. 也就是说是 java 虚拟机初始化了一个 JNIEnv 结构体，把300个函数指针都初始化了。
+4. 但函数指针指向的都是C的函数，所以这是Java虚拟机干的事儿。Java虚拟机作为Java世界和C世界的桥梁，这也是体现之处。
+5. 当你愉快的调用 (*env)->FindClass(env, "含有路径的类名") 时，虽然这是一个C函数，但它是 java 虚拟机初始化的。
