@@ -5,9 +5,9 @@
 * 修改 adminx.py，在适当的位置加入如下行：
 
 		:::python
-            obj.content_html = markdown.markdown(obj.content, extensions=['codehilite', ],
-                                                 extension_configs={'codehilite':
-                                                                    {'noclasses': 'True', 'pygments_style': 'emacs'}})
+		obj.content_html = markdown.markdown(obj.content, extensions=['codehilite', ],
+                                             extension_configs={'codehilite':
+                                                                {'noclasses': 'True', 'pygments_style': 'emacs'}})
 
 * 以上的 `extensions=['codehilite',], extension_configs...` 等等，是为了代码高亮，下面说
 
@@ -25,6 +25,7 @@
 * pygments 支持的所有语言可以在这里查到：[http://pygments.org/docs/lexers/#lexers-for-c-c-languages](http://pygments.org/docs/lexers/#lexers-for-c-c-languages)。
 * codehilite 还有一个参数 `pygments_style` 用来设置 pygments 的style。pygments 的 builtin sytle 有：
 
+		:::python
 		['default', 'emacs', 'friendly', 'colorful']
 
 #### 步骤三：跟 MarkdownPad 的样式统一起来

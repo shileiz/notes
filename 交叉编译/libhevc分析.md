@@ -3,7 +3,8 @@
 * 统一通过接口函数`ihevcd_cxa_api_function()`来调用API。  
 * 把命令作为参数传给这个函数，调用结果通过参数带出。  
 * 函数原型（ihevcd\_api.c）是： 
- 
+
+		:::c 
 		IV_API_CALL_STATUS_T ihevcd_cxa_api_function(iv_obj_t *ps_handle, void *pv_api_ip, void *pv_api_op)
 
 * `ps_handle` 可以是NULL或者decoder\_obj（有的命令需要decoder，有的命令不需要）
@@ -15,6 +16,7 @@
 * 所有的命令如下：  
 	* Codec有关的命令定义(iv.h)（都是以IV\_CMD开头的。）:  
 
+			:::c
 			/* IV_API_COMMAND_TYPE_T:API command type                                   */
 			typedef enum {
 			    IV_CMD_NA                           = 0x7FFFFFFF,
@@ -28,6 +30,7 @@
 	* Decode有关的命令定义如下(ivd.h)（都是以IVD\_CMD开头的。）：  
 	* 其中CONTROL\_API\_COMMAND一般作为CMD\_VIDEO\_CTL的子命令，这种命令都是以IVD\_CMD\_CTL开头的。
 
+			:::c
 			/* IVD_API_COMMAND_TYPE_T:API command type                                   */
 			typedef enum {
 			    IVD_CMD_VIDEO_NA                          = 0x7FFFFFFF,
@@ -53,7 +56,8 @@
 
 * 不同的命令有不同的参数，所以为每个命令封装了一个结构体，结构体包含命令本身及其需要的参数。  
 * 比如 `ivd_video_decode_ip_t` 就是封装了 `IVD_CMD_VIDEO_DECODE` 命令的结构体： 
- 
+
+		:::c 
 		/*****************************************************************************/
 		/*   Video Decode                                                            */
 		/*****************************************************************************/
@@ -98,6 +102,7 @@
 
 * 每次调用API之前，需要定义一个输入命令结构体、一个返回值接收结构体，然后把这两个结构体传入接口函数。  比如：
 
+		:::c
 	    ivd_video_decode_ip_t s_video_decode_ip;  //定义输入命令结构体
         ivd_video_decode_op_t s_video_decode_op;  //定义接收API调用结果的结构体
        	 
@@ -156,7 +161,8 @@
 ##关于main.c的用法
 * **解码主循环**  
 * 最主要的循环是在：  
-  
+
+		:::c  
 		while(u4_op_frm_ts < (s_app_ctx.u4_max_frm_ts + s_app_ctx.disp_delay))
 
 * `u4_op_frm_ts` 表示当前是第几帧，从0开始，每次循环加1。  
