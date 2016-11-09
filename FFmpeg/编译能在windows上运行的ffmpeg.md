@@ -30,6 +30,9 @@
 
 		pacman -S mingw-w64-x86_64-gcc
 
+>这里说一下怎么找到 mingw-w64-x86_64-gcc 这个软件包的名字的，可以用如下命令： pacman -Sl | grep gcc
+>如果想装32位的MinGW-w64，则使用： pacman -S mingw-w64-i686-gcc
+
 * 安装 make，pkgconfig，yasm 和 diffutils
 
 		pacman -S make pkgconfig diffutils yasm
