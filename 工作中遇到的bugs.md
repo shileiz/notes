@@ -13,3 +13,7 @@
 * 
 		<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
 		<uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS"/>
+
+###centos 编译工程
+1. centos 的 g++ 不叫 g++ ，需要用 `yum install gcc-c++` 安装
+2. 编译最后 ld 报错：`cannot find -lpthread `的解决方法： `yum install glibc-static `

@@ -1,3 +1,10 @@
+###编译Android源码基本流程：
+* `source build/envsetup.sh`
+* `lunch`，选择对应的平台，我用 Nexus9,选择 `17. aosp_flounder-userdebug`，直接输入 17 回车
+* `make systemimage -j 16` 参数 -j 16 是使用16个线程编译，根据机器性能自行调节。
+* 编译完成后，出来的东西会在：`out/target/product/flounder`
+
+
 ###问题现象
 * 无法启动的手机，可以adb, 可以logcat，所以应该是进了 Android 系统了，不过系统 UI 起不来。
 * 从logcat看, 应该是 data 分区没有挂载引起的系统起不来。
