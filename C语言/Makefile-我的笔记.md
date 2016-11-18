@@ -120,6 +120,11 @@
 * 返回：被替换过后的字符串。
 * 说明：pattern 可以包括通配符 “%”，表示任意长度的字串。如果 replacement 中也包含“%”，那么，replacement 中的这个 “%” 将是 pattern 中的那个“%”所代表的字串。（可以用“\”来转义，以“\%”来表示真实含义的“%”字符）
 * 示例：`$(patsubst %.c,%.o,x.c.c bar.c)` 返回字符串 `x.c.o bar.o`
+* 示例：`$(patsubst %cpp, %o, $(CPP_SRC))`
+
+### patsubst 的另一种方法
+* 以上 patsubst 实现的功能，可以用以下方式简便实现：
+* `CPP_OBJ=$(CPP_SRC:%.cpp=%.o)`
 	
 ###了解了这些，我们阶段三的Makefile是如下这样的：
 
