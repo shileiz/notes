@@ -2,33 +2,35 @@
 Windows-64 bit
 
 
----->Shell:
-git clone git@10.10.49.51:~/ParallelTranscodingForRMHD.git -b rv11encoder-plugin-support
+* Jenkins 的脚本（此台 Jenkins 机器运行在 Windows 上）
 
-cd ParallelTranscodingForRMHD
-git branch -a
-git submodule update --init --recursive
-
-
-cd ffmpeg_module
-git branch -a
-git checkout producer
-git pull
-git branch -a
-cd ..
-
-
-cd wingui
-git branch -a
-git checkout master
-git pull
-git branch -a
-cd ..
-
---->Windows batch command
-path=D:\MinGW_w64_32bits\msys\1.0\bin;D:\MinGW_w64_32bits\mingw32\bin;D:\MinGW_w64_32bits\bin
-cd D:\MinGW_w64_32bits\msys\1.0
-msys_release.bat
+		---->Shell:
+		git clone git@10.10.49.51:~/ParallelTranscodingForRMHD.git -b rv11encoder-plugin-support
+		
+		cd ParallelTranscodingForRMHD
+		git branch -a
+		git submodule update --init --recursive
+		
+		
+		cd ffmpeg_module
+		git branch -a
+		git checkout producer
+		git pull
+		git branch -a
+		cd ..
+		
+		
+		cd wingui
+		git branch -a
+		git checkout master
+		git pull
+		git branch -a
+		cd ..
+		
+		--->Windows batch command
+		path=D:\MinGW_w64_32bits\msys\1.0\bin;D:\MinGW_w64_32bits\mingw32\bin;D:\MinGW_w64_32bits\bin
+		cd D:\MinGW_w64_32bits\msys\1.0
+		msys_release.bat
 
 * 修改编译脚本以适合自己的环境：
 	* 修改 `ParallelTranscodingForRMHD/build_MinGW_w64_32bits.sh`，把里面引用的 "/mingw/mingw32/" 替换成自己电脑上的路径，比如我的就是 "/mingw32/"

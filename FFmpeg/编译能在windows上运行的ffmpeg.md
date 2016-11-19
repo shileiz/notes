@@ -103,8 +103,37 @@
 * 需要把 `/usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll` 一起拷贝到 Windows 电脑上才能正确运行
 
 ### 方式三：用 Microsoft Visual C++ 在 Windows 上编译 ffmpeg
-* 这种方法比较麻烦，需要做  C99-to-C89 的转换
-* 这种方法没有实践过，不做记录
+* 如果使用VS2012及以前的版本，则这种方法比较麻烦，需要做  C99-to-C89 的转换
+* 这里只记录使用 VS2013 编译的过程
+
+#### 原理
+* 同样需要用到 msys2，在 msys2 里调用 ffmpeg 的 config 脚本进行配置
+* config 的时候指定目标是 msvc：`./configure --toolchain=msvc`
+* 然后再 msys2 里用 make 命令进行编译，此时 make 命令调用的编译器不再是 gcc/mingw，而是微软的 cl
+* 为了能让 msys2 找到微软的编译器，必须要引入 vs2013 的环境变量，具体方法下一节细说
+* 注意1：连接器也要用微软的 link.exe，而不能用 msys2 的 link.exe，这两个文件是同名的。msys2 的 link.exe 在这里：`C:\msys64\usr\bin`，所以网上的教程一般建议大家编译之前把这个 link.exe 改名。
+* 注意2：ffmpeg 官方文档里说了，微软的汇编编译器不支持 ffmpeg 里的汇编代码，所以我们必须要用 yasm，在 msys2 里安装即可：`pacman -S yasm`
+
+####操作步骤1：准备工作
+* 从 VS2013 的命令行启动 msys2，以保证 msys2 能正确引入 VS2013 的环境变量，这样才能找到微软的编译器连接器等等。
+* 首先修改 msys2 的启动脚本，让 msys2 启动后能继承 parent 的环境变量：修改 `C:\msys64\msys2_shell.bat`，去掉这一行的注释：`set MSYS2_PATH_TYPE=inherit`
+* 然后打开 vs2013的命令行，VS2013 的命令行在：`C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\Tools\Shortcuts`，双击 “VS2013 开发人员命令提示”打开命令提示符即可
+* 在这个命令提示符里运行 `C:\msys64\msys2_shell.bat`，会弹出 msys2 的命令提示符，在里面敲一下 cl 回车，测试一下是否有输出。
+* 在 msys2 的命令行里，cd 到 ffmpeg 的源码目录
+
+####操作步骤2：config
+* 运行以下命令（需要1到2分钟）：
+
+		./configure  --enable-shared   --prefix=./VS2013  --toolchain=msvc 
+
+* 下一步进行 make
+
+####操作步骤3：make，make install
+* 直接 make 即可
+* make 结束后 make install
+* 最终的产出物是一些动态库 dll 和头文件，并不生成 sln 解决方案文件
+* 这种方式虽然从 ffmpeg 的源代码编译出了可执行文件和库文件，但并没有生成 VS 的解决方案，**我们还是无法用VS调试 ffmpeg 内部的代码**，比如 h264.c
+
 
 ### 方式四：Cygwin
 * 没有实践过，不做记录
