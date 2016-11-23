@@ -37,7 +37,7 @@ Windows-64 bit
 	* 这个路径里应包含： i686-w64-mingw32，bin，include 等
 	* 把里面引用的 "/mingw/bin/" 替换成自己电脑上的路径，比如我的就是 "/usr/bin/"、
 	* 这个路径里应包含 pkg-config.exe，yasm.exe 等
-	* 把 "libgcc_s_sjlj-1.dll" 替换成自己的，比如我的就是："libgcc_s_dw2-1.dll"
+	* 把 `libgcc_s_sjlj-1.dll` 替换成自己的，比如我的就是：`libgcc_s_dw2-1.dll`
 
 * 安装如下第三方库（避免在下一步使用使用 full 来编译 Producer 工程，那样容易遇到问题）：
 	* zlib: 我的 mingw32 默认就有
@@ -54,13 +54,18 @@ Windows-64 bit
 	*  把里面分号分隔的，含有 `$WORKSPACE/ParallelTranscodingForRMHD/` 的部分都删除，加上一个 `/mingw32/lib/pkgconfig/`
 	*  最后改完该行为： `export PKG_CONFIG_PATH=/mingw32/i686-w64-mingw32/lib/zlib/win32/lib/pkgconfig/:/mingw32/lib/pkgconfig/`
 
-* 用 MinGW（w64-32bit 版）编译 ffmpeg
-
-	在 mingw-32 的 shell 里执行（确定已经安装了 mingw-32，敲一下 gcc 回车试试，如果没装，用 pacman 装一下）：
-	sh path/to/ParallelTranscodingForRMHD/build_MinGW_w64_32bits.sh path/to/ParallelTranscodingForRMHD_parent out/put/path release
+* 用 MinGW（w64-32bit 版）编译 ffmpeg。在 mingw-32 的 shell 里执行（确定已经安装了 mingw-32，敲一下 gcc 回车试试，如果没装，用 pacman 装一下）：
+	
+		sh path/to/ParallelTranscodingForRMHD/build_MinGW_w64_32bits.sh path/to/ParallelTranscodingForRMHD_parent out/put/path release
 
 
 * 用 msbuild.exe build GUI
 
-	cd C:\Windows\Microsoft.NET\Framework\v4.0.30319
-	msbuild.exe ParallelTranscodingForRMHD\wingui\RealProducerGUI\RealProducer.sln /t:Rebuild /p:Configuration=Release /p:VisualStudioVersion=12.0
+		cd C:\Windows\Microsoft.NET\Framework\v4.0.30319
+		msbuild.exe ParallelTranscodingForRMHD\wingui\RealProducerGUI\RealProducer.sln /t:Rebuild /p:Configuration=Release /p:VisualStudioVersion=12.0
+
+###遗留问题
+* 运行时还是会去连这个dll：`libgcc_s_sjlj-1.dll`，而不是自己的 MinGW 的：`libgcc_s_dw2-1.dll`
+
+		
+
