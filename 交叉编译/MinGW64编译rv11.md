@@ -77,7 +77,12 @@
 ### 因为 MinGW64 会设置宏 `_WIN32`
 
 * 参考： [http://blog.csdn.net/liangbch/article/details/36020391](http://blog.csdn.net/liangbch/article/details/36020391)
+* MinGW 都预定了哪些宏，参考： [http://blog.csdn.net/10km/article/details/49023471
+](http://blog.csdn.net/10km/article/details/49023471)
 
 * 而我们的代码里有N多地方是只要判断 `_WIN32` 被设置了，就按照 VS 来使用库函数
 * 比如使用 windows 特有的 AVI 相关的函数，MinGW是没有的，这时候就会出错
-* 所以很多地方
+* 所以很多地方要修改一下，把单纯的判断 宏 `_WIN32` 改成同时判断宏 `_WIN32`和宏 `__GNUC__`
+* 宏 `__GNUC__` 是 MinGW 会自动设置的，而 VS 则不会
+
+## 总体解决方法：用 `__MINGW32__`  和 `__MINGW64__` 来判断

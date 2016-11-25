@@ -24,7 +24,13 @@
 * 在 Linux 上出现同样问题：加了三个 -pg 编出来的 ffmpeg 可以在运行的同时输出 gmon.out 文件，但是在用 gprof 进行分析的时候报错：`gprof: file ffmpeg has no symbols`
 * 网上搜了一下，是因为 executable 被 strip 了，还好 ffmpeg 的 config 提供了 `--disable-stripping` 选项
 * 为了保险起见，又加了 `--enable-debug=3` 选项
-* 修改 config 加上上述选项，重新编译
+* 修改 config 加上上述选项，重新编译。这回 gprof 可以正常运行了。
+* 不过新问题是，运行显示的结果，只有寥寥几个 ffmpeg.c 里的函数被统计到了，且耗时几乎都为0。真正耗时的编解码函数（libavcodec.so里的）都没有被统计到。
+* 这是因为尽管编译时产生的各种 so 库，比如 libavcodec.so，都已经加了 -pg 了，但运行时实际载入内存的库，并不是这个。
+* 运行时载入内存的，是机器上本来就安装好的 libavcodec.so（用 ldd ffmpeg 可以看一下），而之前安装的库，是没有加 -pg 的，所以里面的函数跟踪不到。
+* 有两个解决办法：
+	1. 把新编出来的加了-pg的库放到系统的库目录里，比如/usr/lib/,替换到原来的库
+	2. 改用静态库编译 ffmpeg，这样运行ffmpeg时就不会去连接操作系统上原来的动态库了，新编译的带了-pg的二进制函数都被直接放到 ffmpeg 里面了。 改用静态库的配置选项是：`--disable-shared --enable-static`
 
 
 ####gcc的-pg参数

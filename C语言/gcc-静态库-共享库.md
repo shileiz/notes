@@ -312,16 +312,54 @@ Linux下的共享库机制采用了类似于高速缓存的机制，将库信息
 
 补充一点，ldconfig在/sbin里面。
 
-
-
 ####ldconfig几个需要注意的地方 
 1. 直接往/lib和/usr/lib里面加.so，是不用修改/etc/ld.so.conf的，但是完了之后要调一下ldconfig，不然这个library会找不到。
 2. 如果往 /lib 或者 /usr/lib 里加了子目录，然后.so在子目录里，则必须修改一下 /etc/ld.so.conf。 因为 ldconfig 默认只去 /lib 和 /usr/lib 里找东西，而不包括他们的子目录！
-3. 想往其他目录加东西的时候，一定要修改/etc/ld.so.conf，然后再调用ldconfig，不然也会找不到 
-比如安装了一个MySQL到/usr/local/mysql，mysql有一大堆library在/usr/local/mysql/lib下面，这时 就需要在/etc/ld.so.conf下面加一行/usr/local/mysql/lib，保存过后ldconfig一下，新的library才能在 程序运行时被找到。 
-3. 如果想在这两个目录以外放lib，但是又不想在/etc/ld.so.conf中加东西（或者是没有权限加东西）。那也可以，就是export一个全局变 量LD_LIBRARY_PATH，然后运行程序的时候就会去这个目录中找library。一般来讲这只是一种临时的解决方案，在没有权限或临时需要的时 候使用。 
+3. 想往其他目录加东西的时候，一定要修改/etc/ld.so.conf，然后再调用ldconfig，不然也会找不到。比如安装了一个MySQL到/usr/local/mysql，mysql有一大堆library在/usr/local/mysql/lib下面，这时 就需要在/etc/ld.so.conf下面加一行/usr/local/mysql/lib，保存过后ldconfig一下，新的library才能在 程序运行时被找到。 
+3. 如果想在这两个目录以外放lib，但是又不想在/etc/ld.so.conf中加东西（或者是没有权限加东西）。那也可以，就是export一个全局变 量`LD_LIBRARY_PATH`，然后运行程序的时候就会去这个目录中找library。一般来讲这只是一种临时的解决方案，在没有权限或临时需要的时 候使用。 
 4. ldconfig做的这些东西都与运行程序时有关，跟编译时一点关系都没有。编译的时候还是该加-L就得加，不要混淆了。 
 5. 总之，就是不管做了什么关于library的变动后，最好都ldconfig一下，不然会出现一些意想不到的结果。不会花太多的时间，但是会省很多的事。
+
+##ldd
+* 参考：[http://www.jb51.net/LINUXjishu/179400.html](http://www.jb51.net/LINUXjishu/179400.html)
+* ldd 的作用是：判断某个可执行的 binary 含有什么动态库，比如：`ldd ./ffmpeg ` 将打印如下信息：
+
+		linux-vdso.so.1 =>  (0x00007ffc105e4000)
+		libavfilter.so.6 => /usr/local/lib/libavfilter.so.6 (0x00007f41c9a13000)
+		libavformat.so.57 => /usr/local/lib/libavformat.so.57 (0x00007f41c9606000)
+		libavcodec.so.57 => /usr/local/lib/libavcodec.so.57 (0x00007f41c818b000)
+		libswresample.so.2 => /usr/local/lib/libswresample.so.2 (0x00007f41c7f70000)
+		libswscale.so.4 => /usr/local/lib/libswscale.so.4 (0x00007f41c7ce9000)
+		libavutil.so.55 => /usr/local/lib/libavutil.so.55 (0x00007f41c7a72000)
+		libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007f41c776c000)
+		libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f41c73a7000)
+		libpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007f41c7189000)
+		libz.so.1 => /usr/local/lib/libz.so.1 (0x00007f41c6f6f000)
+		/lib64/ld-linux-x86-64.so.2 (0x00007f41c9dc4000)
+
+* 括号里面的内存地址每次运行都会变，意思是本次运行 ffmpeg 时，这些库被装载到内存的哪个地址
+
+###一些原理
+* Linux 上任何可执行程序执行时，ld-linux.so 模块会先于 executable 模块程序工作，并获得控制权。
+* 也就是说，可执行程序正真的业务代码运行以前，ld-linux.so 会先运行，它的作用是载入可执行程序依赖的库。
+* 但当你设置了一些环境变量后，ld-linux.so 的行为会改变，比如设置了 `LD_TRACE_LOADED_OBJECTS=1` 后，ld-linux.so 将打印可执行模块的依赖库。
+
+###另一些原理
+* ld-linux.so 在程序执行之前先取得控制权去载入依赖库
+* 那么它载入的是哪些库呢？ 是你编译程序时连接到可执行文件里的库吗？——不是。
+* 你编译时用 -L/-l 指定要连接到程序了的**动态**库，在运行时就不好使了，这也是动态库的优势：灵活，减小可执行程序的体积
+* 运行程序时，ld-linux.so 载入的动态库，只是该台机器上安装了的库，由 ldconfig 负责维护。
+
+
+###摘自参考文章：
+
+1. 首先ldd不是一个可执行程序，而只是一个shell脚本
+2. ldd能够显示可执行模块的dependency，其原理是通过设置一系列的环境变量，如下：`LD_TRACE_LOADED_OBJECTS、LD_WARN、LD_BIND_NOW、LD_LIBRARY_VERSION、LD_VERBOSE`等。当`LD_TRACE_LOADED_OBJECTS`环境变量不为空时，任何可执行程序在运行时，它都会只显示模块的dependency，而程序并不真正执行。要不你可以在shell终端测试一下，如下：
+	* `export LD_TRACE_LOADED_OBJECTS=1`
+	* 再执行任何的程序，如ls等，看看程序的运行结果
+3. ldd显示可执行模块的dependency的工作原理，其实质是通过ld-linux.so（elf动态库的装载器）来实现的。我们知道，ld-linux.so模块会先于executable模块程序工作，并获得控制权，因此当上述的那些环境变量被设置时，ld-linux.so选择了显示可执行模块的dependency。
+4. 实际上可以直接执行ld-linux.so模块，如：/lib/ld-linux.so.2 --list program（这相当于ldd program）
+
 
 
 
