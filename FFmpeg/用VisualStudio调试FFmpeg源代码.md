@@ -46,3 +46,9 @@
 * 所以我们在这外面套一层 if：`if(sProjectName.find("lib")==0){`
 * 只有是 lib 开头的，我们才去试图找到 rc 文件。
 
+---
+
+* 修改 VS 的配置，以免 ffmpeg 找不到库
+* 首先改一下所有 project 的输出路径，默认是 `$(ProjectDir)..\..\..\msvc\`，我们给改成 `$(ProjectDir)msvc\`
+* 想调试 ffmpeg.exe,还需要修改一下该项目的“调试”，把可执行程序的路径从 ffmpeg 项目的连接器的输出目录复制过来
+

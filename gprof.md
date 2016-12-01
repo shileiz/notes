@@ -36,3 +36,108 @@
 ####gcc的-pg参数
 * You must use this option when compiling the source files you want data about, and you must also use it when linking.
 * 即编译和连接时，都需要-pg参数
+
+####检查你编出来的库/可执行文件到底有没有成功加入 -pg 选项
+* -pg 的原理是： gcc 在你应用程序的每个函数中都加入了一个名为mcount ( or  “_mcount”  , or  “__mcount”)的函数，也就是说你的应用程序里的每一个函数都会调用mcount, 而mcount 会在内存中保存一张函数调用图，并通过函数调用堆栈的形式查找子函数和父函数的地址。这张调用图也保存了所有与函数相关的调用时间，调用次数等等的所有信息。
+* 所以，想检查编出来的库文件或可执行文件，-pg 选项到底好使了没有，可以查看它的符号表，搜索一下关键字 mcount：
+
+		nm xxxxxxx | grep mcount
+
+####其他
+* gcc 命令加了个 xxxx.exp 导致编出来的动态库文件符号表里并没有 mcount，虽然我也加了 -pg 选项。
+* .exp 文件里只写了 VERSION 有关信息： VERSION{....}，为什么我也不知道，但去掉这个就好了。
+
+
+###关于动态库的支持
+* 参考：[http://www.cnblogs.com/lenolix/archive/2010/12/13/1904868.html](http://www.cnblogs.com/lenolix/archive/2010/12/13/1904868.html)
+* 生成一个可执行程序的时候，gcc（实际上是ld）会把 libc.a/libc.so 连接入可执行文件，这个库负责初始化程序的栈空间等工作。即 libc 会在你业务代码之前运行。
+* 加了 -pg 选项，在连接阶段，gcc 会把本应该链接到可执行文件上的 libc.a/libc.so 里的 crt0.o，改成 gcrt0.o
+* gcrt0.o 会在你的main函数之前插入一个函数：`__monstartup`，该函数用来做 profile 相关的初始化工作，比如分配所需的内存
+* 该函数只会对程序的 .text 段进行 profile 的初始化。
+* 因为动态链接库的代码并不在主程序的 .text 段，所以是不会被 profile 到的。
+* 如果想让动态库也能被 profile，只能修改 libc 的代码，这样做不太好。
+* 或者按照网上有些说法，用 `libc_p.a/libc_p.so` 代替正常的 `libc.a/libc.so`，即把链接选项 `-lc` 替换为 `-lc_p`。
+* 因为 `libc_p` 就是支持了 profile 的 libc
+* 不过这么做也有困难，首先不是说有版本的 Linux 上都能安装到 `libc_p` 的，另外在有些系统上，比如下文的 Ubuntu，加了 `-lc_p` 也报错，编译不出来可执行程序。
+
+####动态库的题外话
+* 首先，动态库也分两种：动态链接和动态加载
+* 动态链接是程序运行一开始就把库加载进内存，主程序在调用到库函数的时候才会走到库里的代码。
+* 动态加载是指当程序运行到一定地方的时候，用 dlopen 来加载库，并使用其中的代码。也就是说在主程序想使用库函数之前，库文件是没有被加载进内存的。这种方式在使用完了之后，需要用 dlclose 卸载库。
+
+---
+
+###实验1：动态库确实不行
+* 准备源文件：libtestprofiler.cpp  libtestprofiler.h main.cpp
+* 其中库函数只是单纯的耗时计算，所有源文件内容如下：
+
+
+		:::C++
+		//libtestprofiler.h
+		extern "C"{
+			int loopop();
+		}
+		
+		//libtestprofiler.cpp
+		#include "libtestprofiler.h"
+		extern "C"{
+			int loopop()
+			{
+			    int n = 0;
+			    for(int i = 0; i < 1000000; i++)
+			        for(int j = 0; j < 10000; j++)
+			        {  
+			            n |= i%100 + j/100;
+			        }  
+			    return n;
+			}
+		}
+		
+		//main.cpp
+		#include <iostream>
+		#include "libtestprofiler.h"
+		using namespace std;
+		int main(int argc,char** argv)
+		{
+		    cout << "loopop: " << loopop() << endl;
+		    return 1;
+		}
+
+* 编译库（加 -pg）：
+
+		g++ --shared -fPIC -pg -o libtestprofiler.so libtestprofiler.cpp
+
+* 编译主程序（加 -pg）
+
+		g++ -pg -o main main.cpp -ltestprofiler -L.
+
+* 拷贝库到 /lib/:
+
+		sudo cp libtestprofiler.so /lib/
+
+* 运行主程序：
+
+		./main
+
+* 运行结束后生成了 gmon.out，用 gprof 分析之：
+
+		gprof main
+
+* 发现什么也没统计到，所有函数耗时都是0
+* 看一下库文件里是否加入了 mcount：
+
+		nm libtestprofiler.so | grep mcount
+
+* 结果是加入了的，能看到输出：`U mcount@@GLIBC_2.2.5`，不过还是采集不到动态库里函数的 profile 信息。
+
+###实验2：让动态库也行（实验失败）
+* Ubuntu 默认是没有 libc_p.a/libc_p.so 的，需要安装 libc6-prof：
+
+		sudo apt-get install  libc6-prof
+
+* 源文件同上，库的编译命令不变
+* 在主程序的编译命令里加入 –lc_p 选项。
+
+		g++ -pg -o main main.cpp -ltestprofiler -L. -lc_p
+
+* 以上命令编译报错，google了半天没有找到答案，这个实验暂时不做了。
