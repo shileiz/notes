@@ -1,4 +1,5 @@
 * 官网：[https://github.com/gperftools/gperftools](https://github.com/gperftools/gperftools)
+* 参考：[http://www.cnblogs.com/lenolix/archive/2010/12/13/1904868.html](http://www.cnblogs.com/lenolix/archive/2010/12/13/1904868.html)
 * CPU profile 只是这个工具其中一个 feature，我们就用这个 feature。
 * 其他 feature 还有 tcmalloc：一个比malloc更快的内存管理算法；heap profiler，heap checker。
 
@@ -81,7 +82,7 @@
 		Using local file ./hello.
 		Using local file ./hello.prof.out.
 
-####例2. 稍微复杂和耗时的程序
+####例2. 稍微复杂的程序
 * 准备一个源文件 take_time.c 如下：
 
 		:::c
@@ -121,3 +122,35 @@
 		Removing _start from all stack traces.
 		Total: 2937 samples
 		    2937 100.0% 100.0%     2937 100.0% loopop
+
+####例3.非常复杂：ffmpeg
+* 我们现在用 gperftools 来对复杂的项目 ffmpeg 进行 profile
+* 下载 ffmpeg 最新代码，configure 的时候加上如下选项，以使其编译时能连接 -lprofiler：
+
+		--extra-ldflags=-lprofiler --extra-ldflags=-L/home/zsl/gperftools_build/lib
+
+* 为了以防万一，我还加上了 `--disable-stripping`
+
+* 其他配置选项根据个人需求，我的完整配置命令如下：
+
+		./configure --prefix=/home/zsl/ffmpeg_build --enable-shared --disable-static \
+		--disable-stripping --disable-avdevice --disable-yasm\  
+		--extra-ldflags=-lprofiler --extra-ldflags=-L/home/zsl/gperftools_build/lib 
+
+* make && make install
+
+		make -j 16
+		make install
+
+* 因为是共享库，运行 ffmpeg 之前把lib里的东西都拷贝到 /usr/lib
+* 设置 gperftools 需要的环境变量：
+
+		export CPUPROFILE=ffmpeg.prof.out
+
+* 运行 ffmpeg，得到转码结果的同时得到性能统计文件 ffmpeg.prof.out
+
+		./ffmpeg -i /home/zsl/contents/input.mp4 output.mp4
+
+* 分析性能：
+
+		pprof --text ffmpeg ffmpeg.prof.out  > prof_mp4.txt
