@@ -96,10 +96,6 @@ typedef struct VideoState {
 SDL_Surface     *screen;
 SDL_mutex       *screen_mutex;
 
-/* Since we only have one decoding thread, the Big Struct
-can be global in case we need it. */
-VideoState *global_video_state;
-
 void packet_queue_init(PacketQueue *q) {
 	memset(q, 0, sizeof(PacketQueue));
 	q->mutex = SDL_CreateMutex();
@@ -235,7 +231,7 @@ int audio_decode_frame(VideoState *is) {
 	int resampled_data_size,out_size;
 	Frame *af;
 	af = frame_queue_peek_readable(&is->sampq);
-	frame_queue_next(&is->sampq);
+	// 之前sb，直接把frame_queue_next(&is->sampq)给放这儿了，导致没有声音出来
 	if (!is->swr_ctx) {
 		is->swr_ctx = swr_alloc_set_opts(NULL,
 			AV_CH_LAYOUT_STEREO, AV_SAMPLE_FMT_S16, is->audio_ctx->sample_rate,
@@ -255,11 +251,13 @@ int audio_decode_frame(VideoState *is) {
 	av_fast_malloc(&is->audio_buf, &is->audio_buf_size, out_size);
 	len2 = swr_convert(is->swr_ctx, out, af->frame->nb_samples, in, af->frame->nb_samples);
 	resampled_data_size = len2 * 2 * av_get_bytes_per_sample(AV_SAMPLE_FMT_S16);
+	// 注意，这个 next 一定要放在这里，即用完了这个取出来的 frame 之后再next。因为在 frame_queue_next 里面会释放掉这个 frame
+	frame_queue_next(&is->sampq);
 	return resampled_data_size;
 }
 
 void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
-	
+
 	VideoState *is = (VideoState *)userdata;
 	int len1, audio_size;
 	while (len > 0) {
@@ -337,7 +335,6 @@ int video_thread(void *arg)
 	AVFrame *frame = av_frame_alloc();
 	Frame *vp;
 
-
 	for (;;) {
 		if (packet_queue_get(&is->videoq, pkt, 1) < 0) {
 			// means we quit getting packets
@@ -404,6 +401,7 @@ static int audio_thread(void *arg)
 	Frame *af;
 	int got_frame = 0;
 	AVPacket pkt1, *pkt = &pkt1; 
+
 	do {
 		if (packet_queue_get(&is->audioq, pkt, 1) < 0) {
 			break;
