@@ -284,9 +284,69 @@
 
 		pprof --text ffmpeg ffmpeg.prof.out  > prof_mp4.txt
 
+###三. 图形化输出
+* 用 --gv 取代 --text 即可
+* 使用 --gv 之前，需要安装如下软件：
+	*  `yum install graphviz`
+	*  gv 本身不能用 yum 安装，下载 rpm 包：[http://dl.fedoraproject.org/pub/epel/6/x86_64/gv-3.7.1-1.el6.x86_64.rpm](http://dl.fedoraproject.org/pub/epel/6/x86_64/gv-3.7.1-1.el6.x86_64.rpm)
+	*  `rpm -ivh gv-3.7.1-1.el6.x86_64.rpm`
 
-###三. 问题
+###四. 问题
 
 ####1. x64系统的崩溃问题
-* 使用过程中，即设好了环境变量然后运行 ffmpeg 转码的过程中，会经常的崩溃，报段错误。官方文档也说了，在x64的系统上确实有这问题。
+* 使用过程中，即设好了环境变量然后运行 ffmpeg 转码的过程中，会经常的崩溃，报段错误(Segmentation fault)。官方文档也说了，在x64的系统上确实有这问题。
 * 这种崩溃是随机发生的，多试几次，总有不崩的时候。
+* 官方文档建议的 workarounds：
+* 用 ProfilerStart()/ProfilerStop() 包裹需要 profile 的代码段，而不是使用环境变量 CPUPROFILE 进行全部代码的 profile。
+* 这个方法对我不适用。
+* 官方文档里关于这个问题的描述如下：
+
+>64-BIT ISSUES
+> 
+>...
+>
+>2) On x86-64 64-bit systems, while tcmalloc itself works fine, the
+cpu-profiler tool is unreliable: it will sometimes work, but sometimes
+cause a segfault.  I'll explain the problem first, and then some
+workarounds.
+
+>Note that this only affects the cpu-profiler, which is a
+gperftools feature you must turn on manually by setting the
+CPUPROFILE environment variable.  If you do not turn on cpu-profiling,
+you shouldn't see any crashes due to perftools.
+
+>The gory details: The underlying problem is in the backtrace()
+function, which is a built-in function in libc.
+Backtracing is fairly straightforward in the normal case, but can run
+into problems when having to backtrace across a signal frame.
+Unfortunately, the cpu-profiler uses signals in order to register a
+profiling event, so every backtrace that the profiler does crosses a
+signal frame.
+
+>In our experience, the only time there is trouble is when the signal
+fires in the middle of pthread_mutex_lock.  pthread_mutex_lock is
+called quite a bit from system libraries, particularly at program
+startup and when creating a new thread.
+
+>The solution: The dwarf debugging format has support for 'cfi
+annotations', which make it easy to recognize a signal frame.  Some OS
+distributions, such as Fedora and gentoo 2007.0, already have added
+cfi annotations to their libc.  A future version of libunwind should
+recognize these annotations; these systems should not see any
+crashses.
+
+>Workarounds: If you see problems with crashes when running the
+cpu-profiler, consider inserting ProfilerStart()/ProfilerStop() into
+your code, rather than setting CPUPROFILE.  This will profile only
+those sections of the codebase.  Though we haven't done much testing,
+in theory this should reduce the chance of crashes by limiting the
+signal generation to only a small part of the codebase.  Ideally, you
+would not use ProfilerStart()/ProfilerStop() around code that spawns
+new threads, or is otherwise likely to cause a call to
+pthread_mutex_lock!
+
+#####解决方法：
+* 更新到最新的 libunwind（1.2rc）即可，下载地址：[http://download.savannah.gnu.org/releases/libunwind/libunwind-1.2-rc1.tar.gz](http://download.savannah.gnu.org/releases/libunwind/libunwind-1.2-rc1.tar.gz)
+* 下载后重新安装 libunwind，安装到新的目录
+* 然后重新编译 gperftools，编译之前设置 CPPFLAGS 和 LDFLAGS 为新的 libunwind 的目录，编译好后把新编出来的 gperftools 的库文件拷贝到 /usr/lib64 覆盖原来的。
+* 重新编译被 profile 的程序，连接新编出来的 gperftools 库即可
