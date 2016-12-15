@@ -6,7 +6,7 @@
 ###`print_config()`函数
 * configure 脚本往 config.h 等文件里写东西主要有以下两种方法：
 	1. 直接通过 echo 、cat 等方式写入少量内容
-	2. 通过调用它自己的 `print_config()` 函数写入内容
+	2. 通过调用 `print_config()` 函数写入内容
 * 我们看看 `print_config()` 函数的用法。具体实现就不看了（实际上是通过 awk 配合一系列的字符串替换）。
 * print_config 需要三个参数，调用格式如下：
 * print_config prefix files options
@@ -59,3 +59,25 @@
 
 * 在 config.h 里， 它被 define 成了 100，在 config.mak 里，他前面的 ! 被去掉了。
 
+###`find_things()`函数
+* configure 脚本里有些变量的值不是写死则脚本里的，也不是用户通过参数传进来的，而是从 .c/.h 源文件里读出来的。
+* 这个函数的作用就是从源文件里读出想要的东西。其实现自然是通过正则表达式（与sed配合）。
+* 具体实现细节不去看，看看用法：
+
+		find_things thing pattern file
+
+* 从 file 中找到所有符合 pattern 的模式，并加上后缀 _thing 返回
+* 举例：
+
+		find_things  zsl  ENC      libavcodec/allcodecs.c
+
+* 以上语句将把 libavcodec/allcodecs.c 里复合 ENC 这个 pattern 的行都抓取，并提取出“有用的部分”，然后加上 _zsl 后缀返回，最终的返回结果：
+
+		a64multi_zsl a64multi5_zsl alias_pix_zsl amv_zsl apng_zsl asv1_zsl asv2_zsl avrp_zsl avui_zsl ayuv_zsl  
+		bmp_zsl cinepak_zsl cljr_zsl comfortnoise_zsl dnxhd_zsl dpx_zsl dvvideo_zsl ffv1_zsl ffvhuff_zsl  
+		flashsv_zsl flashsv2_zsl flv_zsl gif_zsl h261_zsl h263_zsl h263p_zsl hap_zsl huffyuv_zsl jpeg2000_zsl   
+		jpegls_zsl ljpeg_zsl mjpeg_zsl mpeg1video_zsl mpeg2video_zsl mpeg4_zsl msmpeg4v2_zsl msmpeg4v3_zsl msvideo1_zsl...
+
+* 至于该函数是如何使用 pattern 的，以及提取的是这一行的哪部分，具体可以看其实现：
+
+		sed -n "s/^[^#]*$pattern.*([^,]*, *\([^,]*\)\(,.*\)*).*/\1_$thing/p" "$file"
