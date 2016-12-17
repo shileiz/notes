@@ -122,7 +122,7 @@
 * 示例：`$(patsubst %.c,%.o,x.c.c bar.c)` 返回字符串 `x.c.o bar.o`
 * 示例：`$(patsubst %cpp, %o, $(CPP_SRC))`
 
-### patsubst 的另一种方法
+### patsubst 的另一种方法（不是函数，是变量的高级用法）
 * 以上 patsubst 实现的功能，可以用以下方式简便实现：
 * `CPP_OBJ=$(CPP_SRC:%.cpp=%.o)`
 	
