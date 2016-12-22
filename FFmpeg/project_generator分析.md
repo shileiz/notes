@@ -1,11 +1,61 @@
-* 首先第一步：
+###第一步：命令行解析
+* 整个程序第一步是解析用户命令行：
 
 		ProjectGenerator.ConfigGenerator.passConfig(argc, argv)
 
+* 这一步的意义是：把用户通过命令行传入的参数（--disable-ffplay 之类的），经过处理，存到 ConfigGenerator 的成员变量 `m_vConfigValues` 里。用户没有传的参数，取 ffmpeg 的默认值（当然包括 ffmpeg auto detect 出来的那些）。
+* 它的做法是模拟 ffmpeg 的 configure 脚本，用户传的最优先，需要 auto detect 的就 模拟 configure 进行 auto detect，其他的按照 configure 的做法设置默认值。
+* 这个函数结束之后，`ConfigGenerator.m_vConfigValues` 形如：
+
+		----------------------------------------
+		| m_sOption: X86_64                     |
+		| m_sValue:  1                          |
+		| m_sPrefix: ARCH_                      |
+		| m_bLock:   false                      |
+		----------------------------------------
+		----------------------------------------
+		| m_sOption: ARM                        |
+		| m_sValue:                             |
+		| m_sPrefix: ARCH_                      |
+		| m_bLock:   false                      |
+		----------------------------------------
+		.
+		.
+		.
+		----------------------------------------
+		| m_sOption: SSE42                      |
+		| m_sValue:  1                          |
+		| m_sPrefix: HAVE_                      |
+		| m_bLock:   false                      |
+		----------------------------------------
+		.
+		.
+		.
+		----------------------------------------
+		| m_sOption: LIBVPX                     |
+		| m_sValue:                             |
+		| m_sPrefix: CONFIG_                    |
+		| m_bLock:   false                      |
+		----------------------------------------
+		----------------------------------------
+		| m_sOption: ENCODERS                   |
+		| m_sValue:  1                          |
+		| m_sPrefix: CONFIG_                    |
+		| m_bLock:   false                      |
+		----------------------------------------
+
+* 需要了解详细过程的，可以看本文 “passConfig详解” 部分
+
+###第二步：那啥解析
+
+
+####passConfig详解
+* 如果没兴趣可以不看，它干了什么上面已经说过了。
 * passConfig() 里比较重点的几步：
 	1.  passConfigureFile()
 
 ####1. passConfigureFile() 分析
+
 
 #####1.1
 * 调用 `loadFromFile()`：把 configure 脚本的**全部文本**读入到 `m_sConfigureFile` 里面
