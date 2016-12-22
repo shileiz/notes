@@ -109,6 +109,11 @@
 * 因为是 disable ，所以 action 变成 unset，即取消变量的意思。
 * 然后会把 `$ENCODER_LIST`  里的变量全部 unset。
 
+##### 小结
+* 传入 `--enable-ffpaly` 相当于生成变量 ffplay，并赋值为 yes。
+* 传入 `--disable-encoders` 相当于 把 `$ENCODER_LIST`  里的变量全部 unset。
+* `$ENCODER_LIST` 里的变量是从 allcodecs.c 里读出来的，详见本文的“变量分析部分”
+
 ###二.变量分析
 
 ####1. `COMPONENT_LIST`
