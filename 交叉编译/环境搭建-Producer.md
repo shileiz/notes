@@ -64,6 +64,16 @@ Windows-64 bit
 		cd C:\Windows\Microsoft.NET\Framework\v4.0.30319
 		msbuild.exe ParallelTranscodingForRMHD\wingui\RealProducerGUI\RealProducer.sln /t:Rebuild /p:Configuration=Release /p:VisualStudioVersion=12.0
 
+
+###修改代码后仅做增量编译
+* MinGW32 命令行 cd 到 `ffmpeg_module` 里，直接执行 make：
+
+		make -j 8 "PRODUCT=PRODUCER"
+
+* 然后 
+
+		make install
+
 ###遗留问题
 * 运行时还是会去连这个dll：`libgcc_s_sjlj-1.dll`，而不是自己的 MinGW 的：`libgcc_s_dw2-1.dll`
 
