@@ -5,6 +5,23 @@
 * `m_sProjectDirectory`: 默认值是 `m_sRootDirectory + "SMP/"`，可以通过参数 --projdir= 自定义。 这是生成的 .sln 等文件将要存放的地方。
 * `m_sOutDirectory`: 默认值是 "../../../msvc/"，可以通过参数 --prefix= 自定义。这是生成的 vs 工程里面，每个 project 的“输出目录”。
 
+### 一些其他
+
+* `project_generator` 在执行过程中会试着去编译需要引入工程的所有源文件，它使用的编译选项（比如 `-I'../../msvc/include'`）也是最终要加入到工程配置文件里的。
+* 注意，因为执行 `project_generator` 是在 ffmpeg configure 所在目录，而生成的工程文件是在该目录下的 SMP 里，所以差了一层。
+* 所以这执行 `project_generator` 过程中，它试着编译源文件时，把相对目录都减少了一级。比如最后生成的工程里会写附加包含目录为 `$(ProjectDir)../../../msvc/include`，而试着编译时（test.bat里），`-I` 参数只会写 `-I'../../msvc/include'`
+
+* 虽然从 MinGW 里取头文件，能成功骗过 `project_generator`，但真正在 VS 编译生成时，肯定还会报错。因为会需要诸如 libbz2.lib 这种东西，这种东西，只能去 SMP 里 clone。
+
+* 可以在 `project_generator` 的代码里把删除 test.bat 的部分注释掉，保留 test.bat 来定位问题。
+* 如果因为 test.bat 运行 cl.exe 时报找不到头文件相关的错，又不知道头文件到底是从哪 Include 进来的，可以用 `cl /E` 展开源文件来跟踪一下。
+* 测试 test.bat 里的 cl 语句之前，需要先在 cmd 里初始化 VS 的环境变量：
+
+		call "%VS140COMNTOOLS%\vsvars32.bat" 
+
+* 具体取决于你电脑上安装的 VS 版本，这些命令可以在 test.bat 最顶端找到。
+* 并且注意 test.bat 里面每一条 cl 语句之前，如果有 mkdir 命令也要运行一下，不让 cl 无法往输出目录里写文件。
+
 
 ###第一步：命令行解析
 * 整个程序第一步是解析用户命令行：
@@ -495,6 +512,14 @@
 		----------------------------------------
 
 ---
+
+## 类图
+![](project_generator_class.jpg)
+
+
+---
+
+
 ## 实操
 
 ### 直接在 ffmpeg 源码目录运行 project_generate.exe，无参数：
