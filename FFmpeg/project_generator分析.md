@@ -20,7 +20,7 @@
 		call "%VS140COMNTOOLS%\vsvars32.bat" 
 
 * 具体取决于你电脑上安装的 VS 版本，这些命令可以在 test.bat 最顶端找到。
-* 并且注意 test.bat 里面每一条 cl 语句之前，如果有 mkdir 命令也要运行一下，不让 cl 无法往输出目录里写文件。
+* 并且注意 test.bat 里面每一条 cl 语句之前，如果有 mkdir 命令也要运行一下，不然 cl 无法往输出目录里写文件。
 
 
 ###第一步：命令行解析
@@ -97,7 +97,7 @@
 
 		ProjectHelper.passAllMake()
 
-* 把模板里的（FFVS-Project-Generator/templates目录下） compat.h，math.h，unistd.h 拷贝到 `m_ConfigHelper.m_sProjectDirectory` 目录
+* 把模板里的（FFVS-Project-Generator/templates目录下） compat.h，math.h，unistd.h 拷贝到 `m_ConfigHelper.m_sProjectDirectory` 目录（默认的，即 `./SMP`）
 * 对 `LIBRARY_LIST` 里的9个 Library 进行循环，处理 enable 了的那些：
 	* 把 ProjectGenerator 成员变量 `m_sProjectDir` 赋值为该 Library 的目录，例如 `m_sProjectDir="./libavcodec"` 
 	* 去 `m_sProjectDir` 目录下找到 Makefile，比如 `./libavcodec/Makefile`
@@ -554,7 +554,7 @@
 
 		int main(void){return 0;};
 
-* Helix 需要被做如上修改的源文件列表如下：
+* Helix 需要被做如上修改的源文件列表如下（12个）：
 
 		bitstrmint.cpp       chxmapptrtoptr.cpp
 		gaConfig.cpp         gettickcount.c       hxalloc.cpp          hxmaputils.cpp
@@ -563,3 +563,126 @@
 
 * 当然这些文件要先备份一下，等生成完解决方案还得拷回去。这里只是防止 Helix 的源文件在生成解决方案阶段编译不过导致无法生成。
 * 生成 libavutil 的时候，因为 producer 加入了 controller，修改了 log.c，include 了 `hb_sock.c` 和 `hb_clt.c`，所以我们要把这两个 .c 文件拷贝到 msvc/include/ 里面去。 
+
+## Producer 的 ffmepg_module 移植到 VS2013 的新方法
+
+### 失败的根本原因1
+* 主要是 project_generator 在解析 libavcodec/Makefile 的时候过于简单粗暴，只要遇到 OBJS 开头的行，都把对应的源文件添加到VS工程里。
+* 这么做对原版的 ffmpeg 无伤大雅。但是我们的 Producer 改写了 libavcodec/Makefile，按不同情况，加入了几个自己特有的目标.o文件，如下：
+
+
+		ifeq ($(TARGET_OS), mingw32)
+		OBJS-$(CONFIG_LIBRV11ENC_ENCODER)      += librv11enc.o
+		OBJS-$(CONFIG_LIBRV40ENC_ENCODER)      += librv40enc.o 
+		else
+		OBJS-$(CONFIG_LIBRV11ENC_ENCODER)      += librv11enc.o hxalloc.o wraphxalloc.o hxslist.o hxstring.o chxmapptrtoptr.o gettickcount.o hxmaputils.o
+		OBJS-$(CONFIG_LIBRV40ENC_ENCODER)      += librv40enc.o hxalloc.o wraphxalloc.o hxslist.o hxstring.o chxmapptrtoptr.o gettickcount.o hxmaputils.o
+		endif
+
+* 可以看到，如果是用 mingw32编译，则根本不需要 hxalloc.o wraphxalloc.o hxslist.o hxstring.o chxmapptrtoptr.o gettickcount.o hxmaputils.o 这么一大堆目标文件。这7个目标文件，正式我们用 project generator 生成vs工程时遇到问题的12个文件中的7个。
+* 再有，Producer 在 Android 里添加了 gaConfig.o 和 bitstrmint.o，而我们生成VS工程也不需要：
+
+
+		ifeq ($(ANDROID), TRUE)
+		OBJS = allcodecs.o                                                      \
+		       audioconvert.o                                                   \
+		       avdct.o                                                          \
+		       avpacket.o                                                       \
+		       avpicture.o                                                      \
+		       bitstream.o                                                      \
+		       bitstream2.o                                                     \
+		       bitstrmint.o                                                     \
+		       gaConfig.o                                                       \
+		       bitstream_filter.o                                               \
+		       codec_desc.o                                                     \
+		       dv_profile.o                                                     \
+		       imgconvert.o                                                     \
+		       mathtables.o                                                     \
+		       options.o                                                        \
+		       parser.o                                                         \
+		       qsv_api.o                                                        \
+		       raw.o                                                            \
+		       resample.o                                                       \
+		       resample2.o                                                      \
+		       utils.o                                                          \
+		       vorbis_parser.o                                                  \
+		       xiph.o                                                           
+		else
+
+* 这样，我们又能去掉两个编不过的源文件。这回就只剩下3个了：librv11dec.c librv11enc.c librv40enc.c
+* 这三个是躲不过的，我们遇到问题再现改。
+
+### 失败的根本原因2
+* Producer 的 config.h 是生成出来的，生成的时候并没有用 --toolchain=msvc 这个参数。所以里面很多配置并不符合 cl.exe 的要求。
+* Producer 生成 config.h 是通过运行编译脚本完成的，目前脚本只支持 Linux 和 MinGW32，这两套脚本里都没配 --toolchain=msvc
+* 所以我们要先在 Producer 的 ffmpeg_module 里，用 msys2 运行如下命令(参数取自Producer的脚本)重新生成 config.h:
+
+		./configure --disable-symver --disable-w32threads --enable-pic --enable-librv11dec --enable-librv11enc --enable-librv40enc --enable-avisynth --enable-memalign-hack --disable-ffserver --enable-ffprobe --enable-ffplay --toolchain=msvc
+
+* 注意，虽然 project generator 也生成 config.h，但它生成的会放到 ./SMP 文件夹里，而不是放在 ./ 里。
+* 注意，msys2 默认找不到 cl.exe 的，所以要通过 VS2013 的命令行来启动 msys2。具体方法：
+	* 首先修改 msys2 的启动脚本，让 msys2 启动后能继承 parent 的环境变量：修改 `C:\msys64\msys2_shell.bat`，去掉这一行的注释：`set MSYS2_PATH_TYPE=inherit`
+	* 然后打开 vs2013的命令行，VS2013 的命令行在：`C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\Tools\Shortcuts`，双击 “VS2013 开发人员命令提示”打开命令提示符即可
+	* 在这个命令提示符里运行 `C:\msys64\msys2_shell.bat`，会弹出 msys2 的命令提示符，在里面敲一下 cl 回车，测试一下是否有输出。
+
+### 解决 librv11dec.c librv11enc.c librv40enc.c 编译不过
+* hb_protocol.h ，从 `E:\ParallelTranscodingForRMHD\producerCtrl\producerCtrl` 拷贝到 ../../msvc/include/ 里
+* 修改 libavcodec/include/hxresult.h，第 71 行它忘记写分号了。。。，另外把这一行的 LONG 改成 LONG32，改后如下：
+
+		typedef LONG32 HRESULT;
+
+* 修改 libavcodec/librv11dec.c
+	1. 把 include Windows.h 的语句块移动到所有 include 语句的最后面
+	2. 把 `#ifdef __ANDROID__` 语句块用 `#if 0`if 包起来
+
+* 修改 libavcodec/librv11enc.c
+	1. 把 `#define CC __stdcall` 改为 `#define CC `，这只是为了应付 cl.exe，后续放到 vs 里再改回来。
+	2. 把所有的 GetProcAddress 替换成 (vodi*)GetProcAddress
+	
+* 修改 libavcodec/librv40enc.c
+	1. 把 `#define CC __stdcall` 改为 `#define CC `，这只是为了应付 cl.exe，后续放到 vs 里再改回来。
+	2. 把所有的 GetProcAddress 替换成 (vodi*)GetProcAddress
+	3. 把其他 include 语句提前，以保证 include Windows.h 在最后
+
+* 解决 helix 代码兼容性问题比较难搞，单开一小节。
+
+#### 解决 helix 代码不兼容
+* Helix 本身已经考虑到了这个问题，所以在它的代码里有这么一段：
+
+		#if (defined(_MSC_VER) && (_MSC_VER > 1100) && defined(_BASETSD_H_))
+		#error For VC++ 6.0 or higher you must include hxtypes.h before other windows header files.
+		#endif
+
+* 按它的说法，我们要在所有的 include 了 Windows 的头文件的地方，要在之前先 include hxtypes.h
+* 如果是 libavcodec 里的源文件，比如 librv11dec.c librv11enc.c librv40enc.c，我们还好控制。找到所有 include 了 windows 头文件 （包括但不限于 windows.h） 的地方，然后在前面加上 `#include "include/hxtypes.h"` 即可。或者本身就有 include 了 hxtypes.h 的（可能是直接，也可能是间接，还挺难找），我们调整一下顺序，把 Windows 的头文件永远放到最后。
+* 不过，project generator 重新生成了 unistd.h（为了把 ffmpeg porting 到 VS 它也是煞费苦心。），并且在里面写了一句：
+
+		#include <BaseTsd.h>
+
+* 以上是一个 Windows 的头文件，所以我们必须在他前面加上：`#include "hxtypes.h"`
+* 但是，unistd.h 是 project generator 在运行过程中生成的（实际是从模板拷贝），并扔到了 ./SMP 里
+* 而每次运行 project generator 会先清空 SMP 文件夹。所以，我们必须修改 project generator 的源码。
+* 首先把 project generator 工程 templates 目录里的 unistd.h 进行修改，在 `#include <BaseTsd.h>` 上面加一行：`#include "hxtypes.h"`
+* 然后把 hxtypes.h 和 hxbastsd.h 拷贝到 templates 里。
+* 然后修改 project generator 的源码，拷贝 unistd.h 的同时，也要拷贝这两个文件。注意 Templates.rc 也要修改。
+* 具体咋改就不说了。
+
+### 操作过程
+* 先去 `ffmepg_module` 运行一下 configure 生成一下 config.h，命令入上文提到的
+* 再修改好 project generator，把新生成的 `project_generate.exe` 拷贝到 `ffmpeg_module` 里来。
+* 编辑上文提到的几个源文件，按上文的方法改好：hxresult.h librv11dec.c librv11enc.c librv40enc.c
+* 编辑 `ffmepg_module/libavcodec/Makefile`。去掉 `ifeq ($(TARGET_OS), mingw32)` 的 else 分支。去掉 `ifeq ($(ANDROID)`, TRUE) 部分。
+* 把编译标准 ffmpeg 需要的头文件都弄到 ../../msvc/include/ 里放好。
+* 生成 libavutil 的时候，因为 producer 加入了 controller，修改了 log.c，include 了 `hb_sock.c` 和 `hb_clt.c`，所以我们要把这两个 .c 文件拷贝到 msvc/include/ 里面去。
+* 运行：
+
+		project_generate.exe --disable-symver --disable-w32threads --enable-pic --enable-libass --disable-avdevice --enable-libfribidi --enable-libfreetype --enable-fontconfig --enable-libfdk-aac --enable-librv11dec --enable-librv11enc --enable-librv40enc --enable-avisynth --enable-memalign-hack --disable-ffserver --enable-ffprobe --enable-ffplay --toolchain=msvc
+
+* 至此，可以成功生成 libavcodec 的工程文件。
+
+### “__asm__”: 未声明的标识符
+* 这是因把宏 `HAVE_INLINE_ASM` 定义为了 1
+* ffmpeg 中有些源码是根据是 `#if HAVE_INLINE_ASM` 来决定是否使用 `__asm__` 这种语法的
+* project generator 生成的 config.h 是会把这个宏设置为0的，一般没有问题
+* 如果 config.h 不是 project generator，是用 configure 生成的，且生成的时候没有把 toolchain 设置为 msvc，则这个宏会是1，就会遇到 “__asm__”: 未声明的标识符 的问题。
+* 即上文所说的 “失败的根本原因2”
