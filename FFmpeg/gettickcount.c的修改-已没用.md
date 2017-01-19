@@ -60,25 +60,3 @@
 * 因为 Windows 上直接就有 GetTickCount()，所以我们不再实现一遍了。只 include windows.h 即可。
 * 对于 GetTickCountInUSec()，Windows 上也没有这个函数，我们简单实现一下，返回一个微妙数，简单的把毫秒乘以1000。这当然是不准确的，但只是为了意思一下。
 * 遗留问题： gettickcount.c 实现的 GetTickCount() 返回类型是 ULONG32，而 Windows 的返回类型是 DWORD。然后 Helix 本来很多类型定义就跟 Windows 不兼容。所以可能后续会有问题。
-
-##bitstrmint.cpp       
-
-##chxmapptrtoptr.cpp
-
-##gaConfig.cpp         
-
-##hxalloc.cpp          
-
-##hxmaputils.cpp
-
-##hxslist.cpp          
-
-##hxstring.cpp         
-
-##librv11dec.c         
-
-##librv11enc.c
-
-##librv40enc.c    
-
-##wraphxalloc.cpp

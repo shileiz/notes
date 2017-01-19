@@ -625,15 +625,32 @@
 	* 然后打开 vs2013的命令行，VS2013 的命令行在：`C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\Tools\Shortcuts`，双击 “VS2013 开发人员命令提示”打开命令提示符即可
 	* 在这个命令提示符里运行 `C:\msys64\msys2_shell.bat`，会弹出 msys2 的命令提示符，在里面敲一下 cl 回车，测试一下是否有输出。
 
-### 解决 librv11dec.c librv11enc.c librv40enc.c 编译不过
-* hb_protocol.h ，从 `E:\ParallelTranscodingForRMHD\producerCtrl\producerCtrl` 拷贝到 ../../msvc/include/ 里
+### 失败的根本原因3：helix 和 Windows 的兼容性
+* Helix 本身已经考虑到了这个问题，所以在它的代码里有这么一段：
+
+		#if (defined(_MSC_VER) && (_MSC_VER > 1100) && defined(_BASETSD_H_))
+		#error For VC++ 6.0 or higher you must include hxtypes.h before other windows header files.
+		#endif
+
+* 按它的说法，我们要在所有的 include 了 Windows 的头文件的地方，要在之前先 include hxtypes.h
+* 所以我们要保证所有有可能 include hxtypes.h 的源文件， 永远是先 include windows 的头文件（包括但不限于 windows.h），然后再 include hxtypes.h。
+* 有可能 include 到 hxtypes.h 的源文件，只可能是 Producer 加入的那几个，即：librv11dec.c librv11enc.c librv40enc.c
+* 这几个文件可能没有直接 include hxtypes.h，但是都间接的 include 到了，hxtypes 是 helix 基础的一个头文件，几乎只要 include 了任何的 Helix 的头文件，都会导致把 hxtypes.h 给 include 进来。
+* 所以我们一定要把这几个文件里，include windows.h 的语句，放到所有 include 的最后。
+* 这里有**一个大坑**：
+	* include <unistd.h> 实际上也是在 include windows 的头文件！！
+	* 因为这里的 unistd.h 不是标准的 POSIX 的，而是 SMP 重写的，SMP 这么做正是为了把 ffmpeg porting 到 VisualStudio 上。
+	* SMP 在它重写的 unistd.h 里有一句：`#include <BaseTsd.h>`，这是一个 Windows 的头文件。
+	* 所以我们在修改 Producer 的几个源文件的时候，一定要注意，把 include window.h **和 include unistd.h** 的部分，都放到所有 include 的最后。
+* 总之，这里要修改 librv11dec.c librv11enc.c librv40enc.c，把 include window.h 和 unistd.h 的语句放到最后。
+
+### 失败的其他原因：杂项
+* hb_protocol.h ，从 `E:\ParallelTranscodingForRMHD\producerCtrl\producerCtrl` 拷贝到 `../../msvc/include/` 里
 * 修改 libavcodec/include/hxresult.h，第 71 行它忘记写分号了。。。，另外把这一行的 LONG 改成 LONG32，改后如下：
 
 		typedef LONG32 HRESULT;
 
-* 修改 libavcodec/librv11dec.c
-	1. 把 include Windows.h 的语句块移动到所有 include 语句的最后面
-	2. 把 `#ifdef __ANDROID__` 语句块用 `#if 0`if 包起来
+* 修改 libavcodec/librv11dec.c， 把 `#ifdef __ANDROID__` 语句块用 `#if 0`if 包起来
 
 * 修改 libavcodec/librv11enc.c
 	1. 把 `#define CC __stdcall` 改为 `#define CC `，这只是为了应付 cl.exe，后续放到 vs 里再改回来。
@@ -642,34 +659,10 @@
 * 修改 libavcodec/librv40enc.c
 	1. 把 `#define CC __stdcall` 改为 `#define CC `，这只是为了应付 cl.exe，后续放到 vs 里再改回来。
 	2. 把所有的 GetProcAddress 替换成 (vodi*)GetProcAddress
-	3. 把其他 include 语句提前，以保证 include Windows.h 在最后
 
-* 解决 helix 代码兼容性问题比较难搞，单开一小节。
-
-#### 解决 helix 代码不兼容
-* Helix 本身已经考虑到了这个问题，所以在它的代码里有这么一段：
-
-		#if (defined(_MSC_VER) && (_MSC_VER > 1100) && defined(_BASETSD_H_))
-		#error For VC++ 6.0 or higher you must include hxtypes.h before other windows header files.
-		#endif
-
-* 按它的说法，我们要在所有的 include 了 Windows 的头文件的地方，要在之前先 include hxtypes.h
-* 如果是 libavcodec 里的源文件，比如 librv11dec.c librv11enc.c librv40enc.c，我们还好控制。找到所有 include 了 windows 头文件 （包括但不限于 windows.h） 的地方，然后在前面加上 `#include "include/hxtypes.h"` 即可。或者本身就有 include 了 hxtypes.h 的（可能是直接，也可能是间接，还挺难找），我们调整一下顺序，把 Windows 的头文件永远放到最后。
-* 不过，project generator 重新生成了 unistd.h（为了把 ffmpeg porting 到 VS 它也是煞费苦心。），并且在里面写了一句：
-
-		#include <BaseTsd.h>
-
-* 以上是一个 Windows 的头文件，所以我们必须在他前面加上：`#include "hxtypes.h"`
-* 但是，unistd.h 是 project generator 在运行过程中生成的（实际是从模板拷贝），并扔到了 ./SMP 里
-* 而每次运行 project generator 会先清空 SMP 文件夹。所以，我们必须修改 project generator 的源码。
-* 首先把 project generator 工程 templates 目录里的 unistd.h 进行修改，在 `#include <BaseTsd.h>` 上面加一行：`#include "hxtypes.h"`
-* 然后把 hxtypes.h 和 hxbastsd.h 拷贝到 templates 里。
-* 然后修改 project generator 的源码，拷贝 unistd.h 的同时，也要拷贝这两个文件。注意 Templates.rc 也要修改。
-* 具体咋改就不说了。
 
 ### 操作过程
 * 先去 `ffmepg_module` 运行一下 configure 生成一下 config.h，命令入上文提到的
-* 再修改好 project generator，把新生成的 `project_generate.exe` 拷贝到 `ffmpeg_module` 里来。
 * 编辑上文提到的几个源文件，按上文的方法改好：hxresult.h librv11dec.c librv11enc.c librv40enc.c
 * 编辑 `ffmepg_module/libavcodec/Makefile`。去掉 `ifeq ($(TARGET_OS), mingw32)` 的 else 分支。去掉 `ifeq ($(ANDROID)`, TRUE) 部分。
 * 把编译标准 ffmpeg 需要的头文件都弄到 ../../msvc/include/ 里放好。
@@ -686,3 +679,16 @@
 * project generator 生成的 config.h 是会把这个宏设置为0的，一般没有问题
 * 如果 config.h 不是 project generator，是用 configure 生成的，且生成的时候没有把 toolchain 设置为 msvc，则这个宏会是1，就会遇到 “__asm__”: 未声明的标识符 的问题。
 * 即上文所说的 “失败的根本原因2”
+
+### libavformat 的错误
+
+#### struct pollfd 重定义问题
+* 原因： `libavformat/os_support.h` 用 `#if !HAVE_STRUCT_POLLFD` 判断是否需要重新定义 struct pollfd。 而 Windows （WinSock2.h） 用 `#if(_WIN32_WINNT >= 0x0600)` 判断是否需要定义 struct pollfd。
+* 导致了这两处都定义了 struct pollfd。
+* 修改 `libavformat/os_support.h` 的 114行，把 `#if !HAVE_STRUCT_POLLFD` 改为：
+
+		#if !HAVE_STRUCT_POLLFD && _WIN32_WINNT < 0x0600
+
+#### hb_sock.h 找不到
+* 从`E:\ParallelTranscodingForRMHD\producerCtrl\producerCtrl` 拷贝到 `../../msvc/include/` 里即可
+* 顺带把 `hb_` 开头的几个头文件都拷贝进去，以免以后再出问题
