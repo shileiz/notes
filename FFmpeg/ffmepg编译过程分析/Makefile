@@ -16,7 +16,7 @@ vpath %.v    $(SRC_PATH)
 vpath %.texi $(SRC_PATH)
 vpath %/fate_config.sh.template $(SRC_PATH)
 
-# 如果用户执行 configure 时打开了 ffmpeg，则 CONFIG_FFMPEG=yes 会出现在 config.mak 里
+# 如果用户执行 configure 时打开了 ffmpeg(没有加 --disable-ffmpeg)，则 CONFIG_FFMPEG=yes 会出现在 config.mak 里
 # 所以这里其实是往 AVPROGS-yes 里添加用户配置了的 programs，如果用户没配 ffserver，则 ffserver 只会加到
 # AVPROGS- 里，而不会加到 AVPROGS-yes 里。AVPROGS- 是个后面不会用到的变量，所以无所谓。
 AVPROGS-$(CONFIG_FFMPEG)   += ffmpeg

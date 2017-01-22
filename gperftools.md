@@ -290,6 +290,9 @@
 	*  `yum install graphviz`
 	*  gv 本身不能用 yum 安装，下载 rpm 包：[http://dl.fedoraproject.org/pub/epel/6/x86_64/gv-3.7.1-1.el6.x86_64.rpm](http://dl.fedoraproject.org/pub/epel/6/x86_64/gv-3.7.1-1.el6.x86_64.rpm)
 	*  `rpm -ivh gv-3.7.1-1.el6.x86_64.rpm`
+* 用 --pdf 可以直接把图形结果生成 pdf 文件：
+
+		pprof --pdf ffmpeg ffmpeg.prof.out  > prof_mp4.pdf
 
 ###四. 问题
 
