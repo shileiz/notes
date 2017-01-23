@@ -5,6 +5,32 @@
 * `m_sProjectDirectory`: 默认值是 `m_sRootDirectory + "SMP/"`，可以通过参数 --projdir= 自定义。 这是生成的 .sln 等文件将要存放的地方。
 * `m_sOutDirectory`: 默认值是 "../../../msvc/"，可以通过参数 --prefix= 自定义。这是生成的 vs 工程里面，每个 project 的“输出目录”。
 
+#### 从用户角度看目录结构
+* --rootdir 只有在用户没有配置 --projdir 和 --prefix 时，才会引用 --rootdir 来作为 VS 工程文件存放的相对目录，以及VS里的输出目录。另外这个参数告诉 project generator ffmpeg 的 configure 脚本在哪里，即 ffmpeg 所有源码的根目录在哪里。
+* --projdir 指定生成的工程文件放到哪里，即$(ProjectDir)。project generator 会把生成的 config.h, unistd.h, .sln，.vcxproj 等文件放到 --projdir= 里面。如果用户没设这个参数，默认是 --rootdir= 下的 SMP/ 目录。
+* --prefix 指定VS工程里配置的输出目录，即$(OutDir)。project generator 会在生成的VS工程里，把所有项目的输出目录设置为：**$(ProjectDir) 下的** --prefix= 。如果用户没有设置，则默认值是"../../../msvc/"。**注意**：设置 --prefix 的时候，一定不要写绝对路径，因为最后会被配置为 $(ProjectDir) 下的** --prefix= ，所以这个 --prefix 是相对于 $(ProjectDir) 的。
+* 注意：对于 VS 工程来说，$(OutDir)引用的是本项目的输出目录，即界面上的，常规--->输出目录。 而 $(ProjectDir) 指的是该项目所在目录，就是 .vcxproj 这些文件所在的目录。
+* project generator 会把所有项目的附加包含目录设置为4个：`.\， ..\， $(OutDir)\include，$(ProjectDir)\..\..\prebuilt\include`。因为用户参数会影响 $(OutDir) 和 $(ProjectDir)，所以用户是可以通过命令行来设置包含目录的。
+* project generator 运行过程中用 test.bat 调用 cl.exe 尝试编译源文件的时候，加入的三个包含目录是：
+
+		/I"./"                   ----> m_sRootDirectory，--rootdir=
+		/I"./SMP/"               ----> m_sProjectDirectory，--projdir= 
+		/I"../../msvc/include/"  ----> m_sOutDirectory，--prefix=
+
+* 注意： 给 project generator 传路径参数的时候，
+	1. 要用正斜杠，即 Linux 上的路径分隔符。
+	2. 目录结尾的斜杠不能省略
+	3. 一律使用相对路径
+
+			--rootdir=./
+			--projdir=./MSVS_Project/
+			--prefix=../MSVS_Output/
+
+#### 关于 `$(ProjectDir)\..\..\prebuilt`
+* 这是 project generator 写死在模板里的，它会被加到所有项目的附加包含目录，附加库目录里
+* 所以这个没有办法通过命令行进行配置，如果想改，只能去改模板。
+* 修改模板也很简单，用文本编辑器全部替换即可。修改好了之后重新生成一下 project generator 即可。
+
 ### 一些其他
 
 * `project_generator` 在执行过程中会试着去编译需要引入工程的所有源文件，它使用的编译选项（比如 `-I'../../msvc/include'`）也是最终要加入到工程配置文件里的。
@@ -279,9 +305,9 @@
 
 * 其中 cl 命令跟 Include 目录相关的（/I）选项如下：
 
-		/I"./"                   ----> 默认的 m_sRootDirectory
-		/I"./SMP/"               ----> 默认的 m_sProjectDirectory
-		/I"../../msvc/include/"  ----> 默认的 m_sOutDirectory
+		/I"./"                   ----> m_sRootDirectory，--rootdir=
+		/I"./SMP/"               ----> m_sProjectDirectory，--projdir= 
+		/I"../../msvc/include/"  ----> m_sOutDirectory，--prefix=
 
 
 -----
@@ -661,18 +687,6 @@
 	2. 把所有的 GetProcAddress 替换成 (vodi*)GetProcAddress
 
 
-### 操作过程
-* 先去 `ffmepg_module` 运行一下 configure 生成一下 config.h，命令入上文提到的
-* 编辑上文提到的几个源文件，按上文的方法改好：hxresult.h librv11dec.c librv11enc.c librv40enc.c
-* 编辑 `ffmepg_module/libavcodec/Makefile`。去掉 `ifeq ($(TARGET_OS), mingw32)` 的 else 分支。去掉 `ifeq ($(ANDROID)`, TRUE) 部分。
-* 把编译标准 ffmpeg 需要的头文件都弄到 ../../msvc/include/ 里放好。
-* 生成 libavutil 的时候，因为 producer 加入了 controller，修改了 log.c，include 了 `hb_sock.c` 和 `hb_clt.c`，所以我们要把这两个 .c 文件拷贝到 msvc/include/ 里面去。
-* 运行：
-
-		project_generate.exe --disable-symver --disable-w32threads --enable-pic --enable-libass --disable-avdevice --enable-libfribidi --enable-libfreetype --enable-fontconfig --enable-libfdk-aac --enable-librv11dec --enable-librv11enc --enable-librv40enc --enable-avisynth --enable-memalign-hack --disable-ffserver --enable-ffprobe --enable-ffplay --toolchain=msvc
-
-* 至此，可以成功生成 libavcodec 的工程文件。
-
 ### “__asm__”: 未声明的标识符
 * 这是因把宏 `HAVE_INLINE_ASM` 定义为了 1
 * ffmpeg 中有些源码是根据是 `#if HAVE_INLINE_ASM` 来决定是否使用 `__asm__` 这种语法的
@@ -692,3 +706,43 @@
 #### hb_sock.h 找不到
 * 从`E:\ParallelTranscodingForRMHD\producerCtrl\producerCtrl` 拷贝到 `../../msvc/include/` 里即可
 * 顺带把 `hb_` 开头的几个头文件都拷贝进去，以免以后再出问题
+
+### 操作过程
+* 先去 `ffmepg_module` 运行一下 configure 生成一下 config.h，命令入上文提到的
+* 编辑上文提到的几个源文件，按上文的方法改好：hxresult.h librv11dec.c librv11enc.c librv40enc.c
+* 编辑 `ffmepg_module/libavcodec/Makefile`。去掉 `ifeq ($(TARGET_OS), mingw32)` 的 else 分支。去掉 `ifeq ($(ANDROID)`, TRUE) 部分。
+* 新建好./VisualStudioProject（取代 ./SMP）用于存放生成的 .sln 等文件，新建 ./VisualStudioOutput(跟 VisualStudioProject 同级)用于存放 VS 的输出文件，以及存放 include。
+* 把编译标准 ffmpeg 需要的头文件都弄到 ../../msvc/include/ 里放好。
+* 生成 libavutil 的时候，因为 producer 加入了 controller，修改了 log.c，include 了 `hb_sock.c` 和 `hb_clt.c`，所以我们要把这两个 .c 文件拷贝到 msvc/include/ 里面去。
+* 运行：
+
+		project_generate.exe --disable-symver --disable-w32threads --enable-pic --enable-libass --disable-avdevice --enable-libfribidi --enable-libfreetype --enable-fontconfig --enable-libfdk-aac --enable-librv11dec --enable-librv11enc --enable-librv40enc --enable-avisynth --enable-memalign-hack --disable-ffserver --enable-ffprobe --enable-ffplay --toolchain=msvc --rootdir=./ --projdir=./VisualStudioProject/ --prefix=../VisualStudioOutput/
+
+* 至此，可以成功生成 libavcodec 的工程文件。
+* 生成的VS工程如果在编译过程中报 LINKER 的错，说 libbz2.lib libiconv.lib 什么的找不到，这是正常的。
+* 这些库需要去 [SMP](https://github.com/ShiftMediaProject) 挨个克隆源码，然后用 VS 生成。然后再拷贝到 `$(ProjectDir)\..\..\prebuilt\lib\x64`(或x86) 里面去。
+* 更简单的方法，不用下载源码自己生成，有提前编译好的：
+
+		https://github.com/ShiftMediaProject/libass/releases/
+		https://github.com/ShiftMediaProject/bzip2/releases/
+		....
+
+* 下载的库没有debug版本，即libxxxd.lib，只有libxxx.lib，没关系，自己复制一份，加个d就好了。
+* 如果下载不到的，就只能去clone源码自己编译了。目前下载不到的貌似只有：fdk-aac。
+
+## 其他问题
+* `error C2275 将此类型用作表达式非法`：在移植c++代码到c的时候，经常会出现一个奇怪的错误：“error C2275: “xxxxx”: 将此类型用作表达式非法”。这个错误是由于c的编译器要求将变量的申明放在一个函数块的头部，而c++没有这样的要求造成的。解决的办法就是把变量的声明全部放在变量的生存块的开始。
+* LINK 的 erro：`error LNK 1169: 找到一个或多个多重定义的符号`，查看详细输出，具体是这几个重定义：
+
+		1>MSVCRTD.lib(MSVCR120D.dll) : error LNK2005: fprintf 已经在 libavformatd.lib(bzlib.obj) 中定义
+		1>MSVCRTD.lib(MSVCR120D.dll) : error LNK2005: vfprintf 已经在 libavcodecd.lib(genericStds.obj) 中定义
+		1>MSVCRTD.lib(MSVCR120D.dll) : error LNK2005: vsprintf 已经在 libavcodecd.lib(genericStds.obj) 中定义
+
+* 可以看到 fprintf 被重定义了，除了微软定义过，bzlib.obj(被打包在了 libbz2.lib 里面)也定义了。vfprintf 和 vsprintf 除了微软，还被 fdk-aac 的 genericStds.obj 重定义过（ 被打包在 libfdk-aac.lib 里面）。
+* 用微软的工具 dumpbin.exe 可以查看 .lib 里有哪些 obj，有哪些 symbol 等等。
+
+		// /ARCHIVEMEMBERS 查看 lib 有哪些 obj
+		C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin>dumpbin.exe /ARCHIVEMEMBERS libfdk-aac.lib
+		
+		// /SYMBOLS 查看 lib 的符号表
+		C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin>dumpbin.exe /SYMBOLS libfdk-aac.lib
