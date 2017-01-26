@@ -1,0 +1,157 @@
+1. 更新 ffmpeg_module
+cd ffmpeg_module
+git pull
+把 ffmpeg_module 拷贝到：E:\ParallelTranscodingForRMHD\ 里
+
+2. configure 生成 config.h
+2.1 打开 MinGW32 的命令行。具体方法：
+	* 首先修改 msys2 的启动脚本，让 msys2 启动后能继承 parent 的环境变量：修改 `C:\msys64\msys2_shell.bat`，去掉这一行的注释：`set MSYS2_PATH_TYPE=inherit`
+	* 然后打开 vs2013的命令行，VS2013 的命令行在：`C:\Program Files (x86)\Microsoft Visual Studio 12.0\Common7\Tools\Shortcuts`，双击 “VS2013 开发人员命令提示”打开命令提示符即可
+	* 在这个命令提示符里运行 `C:\msys64\msys2_shell.bat`，会弹出 msys2 的命令提示符，在里面敲一下 cl 回车，测试一下是否有输出。
+	
+2.2 
+cd  /E/ParallelTranscodingForRMHD/ffmpeg_module
+./configure --disable-symver --disable-w32threads --enable-pic --enable-librv11dec --enable-librv11enc --enable-librv40enc --enable-avisynth --enable-memalign-hack --disable-ffserver --enable-ffprobe --enable-ffplay --toolchain=msvc
+
+3. 修改源文件
+3.1 libavcodec/hxresult.h 71行改为：
+typedef LONG32 HRESULT;
+
+
+3.2 libavcodec/librv11dec.c
+把 
+#if defined(_WIN32)
+#include <windows.h>
+static const char* lib_name= TEXT("librvDecDll.dll");
+#endif
+移动到最后
+
+把 #ifdef __ANDROID__ 语句块用 #if 0 ... endif 包起来
+
+
+3.3 libavcodec/librv11enc.c
+把 
+#include <unistd.h>
+和
+#if defined(_WIN32)
+#define _WIN32_WINNT 0x0502
+#include <windows.h>
+#define CC __stdcall
+#else
+#define CC
+#endif
+移动到最后
+
+把
+#define CC __stdcall
+改为
+#define CC 
+
+把所有的 GetProcAddress 替换成 (void*)GetProcAddress
+
+把 #include <strings.h> 改为 #include <string.h>
+
+3.4 libavcodec/librv40enc.c
+把 
+#include <unistd.h>
+和
+#if defined(_WIN32)
+#define _WIN32_WINNT 0x0502
+#include <windows.h>
+#define CC __stdcall
+#else
+#define CC
+#endif
+移动到最后
+
+把
+#define CC __stdcall
+改为
+#define CC 
+
+把所有的 GetProcAddress 替换成 (void*)GetProcAddress
+
+把 #include <strings.h> 改为 #include <string.h>
+
+
+3.5 libavformat/os_support.h
+修改 libavformat/os_support.h 的 114行，把 #if !HAVE_STRUCT_POLLFD 改为：
+
+#if !HAVE_STRUCT_POLLFD && _WIN32_WINNT < 0x0600
+
+4.修改 Makefile
+编辑 ffmepg_module/libavcodec/Makefile。去掉 ifeq ($(TARGET_OS), mingw32) 的 else 分支。去掉 ifeq ($(ANDROID), TRUE) ... else 部分。
+
+5.
+新建好./VisualStudioProject（取代 ./SMP）用于存放生成的 .sln 等文件，在 ffmpeg_module 里
+新建 ./VisualStudioOutput(跟 VisualStudioProject 同级)用于存放 VS 的输出文件，以及存放 include。
+
+6. 放入头文件
+把如下头文件放入 ./VisualStudioOutput/include/
+
+6.1 头文件来源：SMP git 下载（其中 fdk-aac 只能下载到源码，需要自己编译生成 include 目录）
+libbz2: bzlib.h
+libiconv: iconv.h
+liblzma: lzma.h 以及 lzma 文件夹
+libzlib: zlib.h, zconf.h
+fdk-aac：fdk-aac 文件夹
+ass：ass 文件夹
+freetype2：freetype2 文件夹
+fontconfig：fontconfig 文件夹
+fribidi：fribidi 文件夹
+
+
+6.2 头文件来源：Producer
+hb_ 开头的 .h 以及 hb_clt.c 和 hb_sock.c 这两个 c 文件
+
+7. prebuilt 库的处理
+新建 VisualStudioPrebuilt 文件夹，跟 VisualStudioProject 和 VisualStudioOutput 同级
+修改生成的工程文件：*.vcxproj（在 VisualStudioProject 里）
+把所有的 $(ProjectDir)\..\..\prebuilt 替换为 $(ProjectDir)\..\VisualStudioPrebuilt
+在 VisualStudioPrebuilt 里新建 lib 目录， lib里新建 x86 和 x64 目录
+把从 SMP 下载的预编译好的 lib 文件（fdk-aac没有预编译好的，需要自己编译），分别放入上述 x86 和 x64 目录：
+libbz2.lib
+libiconv.lib
+libfdk-aac.lib
+liblzma.lib
+libzlib.lib
+libass.lib
+libfontconfig.lib
+libfreetype.lib
+libfribidi.lib
+
+
+所有项目右键，附加依赖项里去掉 rv11 相关的3个（也可以编辑所有 *.vcxproj 文件，把以下三个替换为空）：
+librv11dec.lib
+librv11enc.lib
+librv40enc.lib
+
+
+8.解决其他源码问题
+* 生成 libavformat 的时候，报了一个语法错误：
+
+		error C2065: “rm”: 未声明的标识符	rmdec.c	328	1	libavformat
+
+* 原因是：`RMDemuxContext *rm = s->priv_data;` 这一行定义 rm 变量时，写在了两个 if 语句之后。而 c 语言的语法要求，所有变量的定义必须在函数的最开始，所以挪上去就好了。
+
+###2.
+* 生成 ffmpeg 的时候报错说 `time_t` 重定义了。
+* 暂时把 cmdutils.c 里的 `typedef long time_t;` 注释掉解决
+
+###3.
+* 生成 ffmpeg 的时候，报错说：
+
+		2>libavcodec.lib(librv11enc.obj) : error LNK2019: 无法解析的外部符号 strcasecmp，该符号在函数 librmhdenc_init 中被引用
+		2>libavcodec.lib(librv40enc.obj) : error LNK2001: 无法解析的外部符号 str
+* 修改 librv40enc.c 和 librv11enc.c 在 `#if defined(_WIN32)` 的宏下面加上一句： `#define strcasecmp stricmp`
+* 原因是 Windows 和 Linux 对于 区分大小写/不区分大小写 比较字符串的函数名定义不一样的。
+
+
+
+
+
+9.善后工作
+Makefile 没必要改，把原版考过去覆盖即可
+
+
+

@@ -681,10 +681,12 @@
 * 修改 libavcodec/librv11enc.c
 	1. 把 `#define CC __stdcall` 改为 `#define CC `，这只是为了应付 cl.exe，后续放到 vs 里再改回来。
 	2. 把所有的 GetProcAddress 替换成 (vodi*)GetProcAddress
+	3. 把 `#include <strings.h>` 改为 `#include <string.h>`， strings.h 是已经被 posix 弃用的一个头文件，里面的函数都可以被 string.h 代替。这个直接改了没有影响。因为 strings.h 里也只是单纯的 include 了 string.h
 	
 * 修改 libavcodec/librv40enc.c
 	1. 把 `#define CC __stdcall` 改为 `#define CC `，这只是为了应付 cl.exe，后续放到 vs 里再改回来。
-	2. 把所有的 GetProcAddress 替换成 (vodi*)GetProcAddress
+	2. 把所有的 GetProcAddress 替换成 (void*)GetProcAddress
+	3. 把 `#include <strings.h>` 改为 `#include <string.h>`
 
 
 ### “__asm__”: 未声明的标识符
@@ -728,9 +730,31 @@
 		....
 
 * 下载的库没有debug版本，即libxxxd.lib，只有libxxx.lib，没关系，自己复制一份，加个d就好了。
-* 如果下载不到的，就只能去clone源码自己编译了。目前下载不到的貌似只有：fdk-aac。
+* 如果下载不到的，就只能去clone源码自己编译了。目前下载不到的貌似只有：fdk-aac, fdk-aac 的 releases 页面，下到的 zip 里也是源码，而不是 build 好的库。源码也没关系，下载完了自己编译一下就可以了，会生成 include 和 lib
 
 ## 其他问题
+
+###1.
+* 生成 libavformat 的时候，报了一个语法错误：
+
+		error C2065: “rm”: 未声明的标识符	rmdec.c	328	1	libavformat
+
+* 原因是：`RMDemuxContext *rm = s->priv_data;` 这一行定义 rm 变量时，写在了两个 if 语句之后。而 c 语言的语法要求，所有变量的定义必须在函数的最开始，所以挪上去就好了。
+
+###2.
+* 生成 ffmpeg 的时候报错说 `time_t` 重定义了。
+* 暂时把 cmdutils.c 里的 `typedef long time_t;` 注释掉解决
+
+###3.
+* 生成 ffmpeg 的时候，报错说：
+
+		2>libavcodec.lib(librv11enc.obj) : error LNK2019: 无法解析的外部符号 strcasecmp，该符号在函数 librmhdenc_init 中被引用
+		2>libavcodec.lib(librv40enc.obj) : error LNK2001: 无法解析的外部符号 str
+* 修改 librv40enc.c 和 librv11enc.c 在 `#if defined(_WIN32)` 的宏下面加上一句： `#define strcasecmp stricmp`
+* 原因是 Windows 和 Linux 对于 区分大小写/不区分大小写 比较字符串的函数名定义不一样的。
+
+###n.(已经不存在)
+
 * `error C2275 将此类型用作表达式非法`：在移植c++代码到c的时候，经常会出现一个奇怪的错误：“error C2275: “xxxxx”: 将此类型用作表达式非法”。这个错误是由于c的编译器要求将变量的申明放在一个函数块的头部，而c++没有这样的要求造成的。解决的办法就是把变量的声明全部放在变量的生存块的开始。
 * LINK 的 erro：`error LNK 1169: 找到一个或多个多重定义的符号`，查看详细输出，具体是这几个重定义：
 
@@ -738,11 +762,4 @@
 		1>MSVCRTD.lib(MSVCR120D.dll) : error LNK2005: vfprintf 已经在 libavcodecd.lib(genericStds.obj) 中定义
 		1>MSVCRTD.lib(MSVCR120D.dll) : error LNK2005: vsprintf 已经在 libavcodecd.lib(genericStds.obj) 中定义
 
-* 可以看到 fprintf 被重定义了，除了微软定义过，bzlib.obj(被打包在了 libbz2.lib 里面)也定义了。vfprintf 和 vsprintf 除了微软，还被 fdk-aac 的 genericStds.obj 重定义过（ 被打包在 libfdk-aac.lib 里面）。
-* 用微软的工具 dumpbin.exe 可以查看 .lib 里有哪些 obj，有哪些 symbol 等等。
-
-		// /ARCHIVEMEMBERS 查看 lib 有哪些 obj
-		C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin>dumpbin.exe /ARCHIVEMEMBERS libfdk-aac.lib
-		
-		// /SYMBOLS 查看 lib 的符号表
-		C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin>dumpbin.exe /SYMBOLS libfdk-aac.lib
+* 这应该是之前 include 的 头文件并不是从 SMP 获得的有关
