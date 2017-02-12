@@ -108,6 +108,11 @@ include $(SRC_PATH)/$(1)/Makefile
 include $(SRC_PATH)/library.mak
 endef
 
+
+# 调用 DOSUBDIR，传入的参数是 libavdevice libavfilter ... libavutil
+# 调用的结果是 include 了 libavdevice/Makefile libavdevice/x86/Makefile ... 
+# 然后 include library.mak
+# library.mak 定义了目标，SUBDIR 会传递给 library.mak，SUBDIR 即传给 DOSUBDIR 的参数：libavdevice libavfilter ... libavutil
 $(foreach D,$(FFLIBS),$(eval $(call DOSUBDIR,lib$(D))))
 
 include $(SRC_PATH)/doc/Makefile
@@ -116,6 +121,8 @@ include $(SRC_PATH)/doc/Makefile
 # $(1)$(PROGSSUF)_g$(EXESUF): LDFLAGS += $(LDFLAGS-$(1)) 的意思是
 # 定义目标变量 ffmpeg_g:LDFLAGS += $(LDFLAGS-ffmpeg)
 # 不过 LDFLAGS-ffmpeg 一般来说为空，没找到在哪里定义的，所以没啥用
+# EXEOBJS 在 config.mak 里定义，一般为空
+# OBJS-ffmpeg += ffmpeg.o $(OBJS-ffmpeg-yes)
 define DOPROG
 OBJS-$(1) += $(1).o $(EXEOBJS) $(OBJS-$(1)-yes)
 $(1)$(PROGSSUF)_g$(EXESUF): $$(OBJS-$(1))
@@ -128,6 +135,12 @@ endef
 # 此时 PROGS=ffmpeg.exe ffplay.exe ffprobe.exe
 # $(P:$(PROGSSUF)$(EXESUF)=)的目的是去掉后缀 .exe，相当于 $(ffmepg.exe:.exe=)
 # 所以调用命令包的时候，传入的参数是 ffmpeg，ffplay，ffprobe
+# 经过如下命令包调用，我们就有了如下几个目标：
+# ffmpeg_g.exe: cmdutils.o ffmpeg_opt.o ffmpeg_filter.o ffmpeg.o
+# ffplay_g.exe: cmdutils.o ffplay.o
+# ffprobe_g.exe: cmdutils.o ffprobe.o
+# make 进行到这里时，会检查上述依赖的 .o 是否存在
+# 但不会执行生成命令，因为命令为空
 $(foreach P,$(PROGS),$(eval $(call DOPROG,$(P:$(PROGSSUF)$(EXESUF)=))))
 
 ffprobe.o cmdutils.o libavcodec/utils.o libavformat/utils.o libavdevice/avdevice.o libavfilter/avfilter.o libavutil/utils.o libpostproc/postprocess.o libswresample/swresample.o libswscale/utils.o : libavutil/ffversion.h
@@ -143,17 +156,21 @@ $(PROGS): %$(PROGSSUF)$(EXESUF): %$(PROGSSUF)_g$(EXESUF)
 # FF_DEP_LIBS := $(DEP_LIBS) 
 # DEP_LIBS 在 common.mak 里定义，它包含多少个库是写死的，取决于主控 Makefile 写死的 FFLIBS 和 FFLIBS-yes 变量
 # 而每个库的库名的格式是根据用户配置的 config.mak 生成的，可以是 libavcodec/libavcodec.a，也可以是 libavcodec/libavcodec.so，windows上还可能是 .dll
+# 即 $(FF_DEP_LIBS) 展开后是：libavcodec/libavcodec.a libavcodec/libavcodec.a
 # 生成 ffmpeg_g.exe 的命令是：$(LD) $(LDFLAGS) $(LDEXEFLAGS) $(LD_O) $(OBJS-$*) $(FF_EXTRALIBS)
 # 其中的 $(OBJS-$*) 即 $(OBJS-ffmpeg)，这是这主控 Makefile 写死并经命令包 DOPROG 处理过的
 # OBJS-ffmpeg += ffmpeg.o $(OBJS-ffmpeg-yes)，最终值形如： OBJS-ffmpeg = ffmpeg.o cmdutils.o ffmpeg_opt.o
 # 其中的 $(LD_O) 是用户配置的，在 config.mak 里。Linux 平台时 LD_O=-o $@，windows 平台时 LD_O=-out:$@
 # 其中的 $(LDEXEFLAGS) 在 config.mak 里，用户配置，默认是空
-# 其中的 $(LDFLAGS) 在 common.mak 里定义，由写死的 ALLFFLIBS 拼接用户定义的 LDFLAGS 而成
+# 其中的 $(LDFLAGS) 在 common.mak 里定义，由写死的 ALLFFLIBS 拼接用户定义的 LDFLAGS 而成，最终形如：-Llibavcodec -Llibavdevice .... -Wl,--as-needed ...
 # 另外，虽然命令包 DOPROG 里定义了目标变量 ffmepg_g:LDFLAGS，但实际上并没改变它的值
 # $(FF_EXTRALIBS) 是在主控里定义的，它取 common.mak 里的 $(FFEXTRALIBS)
 # 最终其展开为 -lavdevice -lavfilter ... -lm -lz -pthread
 # 其中前半部分是写死的，写死在主控里的 FFLIBS/FFLIBS-yes 造就了 -lavdevice -lavfilter ...
 # 后半部分是根据用户配置生成在 config.mak 里的
+# 因为前面调用 DOPROG 命令包的时候，已经分别有了 ffmpeg_g.exe，ffplay_g.exe，ffprobe_g.exe 这几个 target，所以 make 会检查上面写的依赖项
+# 不过上面 DOPROG 生成的 target 并没有命令，所以不会执行什么。
+# 这里的意义在于执行 ld 命令，生成 ffmpeg_g.exe
 %$(PROGSSUF)_g$(EXESUF): %.o $(FF_DEP_LIBS)
 	$(LD) $(LDFLAGS) $(LDEXEFLAGS) $(LD_O) $(OBJS-$*) $(FF_EXTRALIBS)
 
