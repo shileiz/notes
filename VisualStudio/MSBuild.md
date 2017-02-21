@@ -5,6 +5,7 @@
 * 本文的基本概念对于 VC++ 是一样的，请放心阅读
 * 关于 VC++ 的 MSBuild，可以参考：
 	* [MSBuild (Visual C++) Overview](https://msdn.microsoft.com/en-us/library/ee662426.aspx)
+	* [MSBuild (Visual C++)](https://msdn.microsoft.com/en-us/library/dd293626.aspx)
 	* [MSBuild Tasks Specific to Visual C++](https://msdn.microsoft.com/en-us/library/ff960151.aspx)
 	* [CL Task](https://msdn.microsoft.com/en-us/library/ee862477.aspx)
 
@@ -98,5 +99,94 @@
 * 用如下语法引用一个 ItemType 的所有值，比如上述定义的 Compile：
 
 		@(Compile) 
+
+* 将引用到 main.cpp;calc\add.cpp
+* 分号是默认的分隔符，也可以自定义，但一般用不上。
+
+#### Item 的作用
+* Defines the inputs for the build process. [参考这里](https://msdn.microsoft.com/en-us/library/646dk05y.aspx)
+
+#### Item Metadata
+* 每一个 Item 都有默认的 Metadata（Well-known Item Metadata），比如 Filename
+* 引用某个 ItemType 的 Metdata 的语法是：
+
+		%(ItemType.MetaDataName)  
+
+* 比如：
+
+		%(Compile.Filename) 
+
+##### 默认 Metadata 
+* [Well-known Item Metadata](https://msdn.microsoft.com/en-us/library/ms164313.aspx) 即默认的 Metadata，每个 Item 自带这些 Metadata
+* 共有如下这些 ：
+		
+		FullPath,RootDir,Filename,Extension,RelativeDir,Directory,RecursiveDir,Identity,ModifiedTime,CreatedTime,AccessedTime
+
+##### 自定义 Metadata
+* 给一个 Item 定义 Metadata 的语法是，在 Item 节点下添加子节点。例如：
+
+		<ItemGroup>  
+		    <CSFile Include="main.cs">  
+		        <Culture>Fr</Culture>  
+		    </CSFile>  
+		</ItemGroup>  
+
+* 以上给 CSFile 这个 Item 定义了一个叫 Culture 的 Metadata，这个 Metadata 的值是 Fr。
+* 同样可以引用这个 Metadata 的值：
+
+		%(CSFile.Culture) 
+
+##### 自定义默认 Metadata
+* 可以用 [ItemDefinitionGroup](https://msdn.microsoft.com/en-us/library/bb629392.aspx) 给某类 Item 设置默认的 Metadata：
+
+		<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">  
+		    <ItemDefinitionGroup>  
+		        <i>  
+		            <m>m1</m>  
+		            <n>n1</n>  
+		        </i>        
+		    </ItemDefinitionGroup>  
+		    <ItemGroup>  
+		        <i Include="a">  
+		            <o>o1</o>  
+		            <n>n2</n>  
+		        </i>  
+		    </ItemGroup>  
+		    ...  
+		</Project>  
+
+* 以上代码给 Item i，设置了 m 和 n 两个默认 Metadata
+* 但定义 Item i 的时候，默认 Metadata n 被覆盖了，所以 i.n 等于 n2，而 m 没有被覆盖，所以 i.m 等于 m1
+
+### 5。一个测试样例
+* 新建一个 test.csproj，内容如下：
+
+		<?xml version="1.0" encoding="utf-8"?>  
+		<Project ToolsVersion="12.0"  xmlns="http://schemas.microsoft.com/developer/msbuild/2003">  
+		
+			<ItemGroup>  
+				<Compile Include="main.cpp" >
+					<meta1>m1</meta1>
+				</Compile>
+				<Compile Include="calc\add.cpp" > 
+					<meta1>m2</meta1>	
+				</Compile>
+			</ItemGroup>  
+		
+		
+			<Target Name="HelloWorld">  
+			  <Message Text="%(Compile.Filename)"></Message>
+			  <Message Text="---------------"></Message>  
+			  <Message Text="@(Compile)"></Message>
+			  <Message Text="---------------"></Message>  
+			  <Message Text="%(Compile.meta1)"></Message>
+			</Target>  
+			
+		</Project>
+
+* 运行如下命令来测试：
+
+		msbuild test.csproj /t:HelloWorld
+
 
 
