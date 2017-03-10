@@ -7,8 +7,49 @@
 ###编译Android源码遇到的问题：
 1. 报了个 gperf 没有的错，用 apt-get 装了一下就好了
 2. 说 java 版本不对，编 5.1.1 的源码要求是 java 1.7，而我的是 1.8，百度一下安装一下 open jdk1.7 即可
-3. 运行了 make clean 之后出了问题：因为在源码根目录运行了 make clean，所以删掉了很多东西。导致再次 make 的时候说找不到某个目标文件。百度了一下，根据结果去 framework/base 目录里运行了一下 mmm
-4. 运行 mmm 时又说 libz.so.1 找不到，又百度了一下，`sudo apt-get install lib32z1` 搞定。
+3. 运行了 make clean 之后出了问题：因为在源码根目录运行了 make clean，所以删掉了很多东西。导致再次 make 的时候说找不到某个目标文件。百度了一下，根据结果去 framework/base 目录里运行了一下 `mmm .` (注意最后有个点)
+4. 运行 `mmm  .` 时又说 libz.so.1 找不到，又百度了一下，`sudo apt-get install lib32z1` 搞定。
+5. 再次运行 `mmm .` 又报了个 python 的错，大概是说 `subprocess.call([bisonExe, '-d', '-p', prefix, inputFile, '-o', outputCpp])` 的时候，找不到 bisonExe。解决方法是安装 bison：`sudo apt-get install bison `
+
+####编译源码之前需要安装的软件
+* `sudo apt-get install git gnupg flex bison gperf build-essential zip curl libc6-dev libncurses5-dev:i386 x11proto-core-dev libx11-dev:i386 libreadline6-dev:i386 libgl1-mesa-dri:i386 libgl1-mesa-dev g++-multilib mingw32 tofrodos python-markdown libxml2-utils xsltproc zlib1g-dev:i386 dpkg-dev`
+* 安装到 `libgl1-mesa-dri:i386` 的时候报了个奇怪的错：
+
+		下列软件包有未满足的依赖关系：
+		 unity-control-center : 依赖: libcheese-gtk23 (>= 3.4.0) 但是它将不会被安装
+		                        依赖: libcheese7 (>= 3.0.1) 但是它将不会被安装
+
+* 百度到的解决方案： `sudo aptitude install libgl1-mesa-dri:i386`
+* 都安装成功后： `sudo ln -s /usr/lib/i386-linux-gnu/mesa/libGL.so.1 /usr/lib/i386-linux-gnu/libGL.so`
+
+###m，mm，mmm的区别
+* 在任意目录下运行 m ，都是编译整个源码，生成 system.img
+* 在某个目录下运行 mm，只编译该目录，生成相应的模块。该路径下要有 Android.mk
+* mmm 后面可以跟路径，指定编译的模块，同样该路径下要有 Android.mk
+
+##编译Android源码:
+* 结果是生成 system.img，userdata.img，ramdisk.img	
+
+
+### boot.img
+* boot.img 包含两部分：kernel 和 ramdisk。
+* kernel 就是 Linux 内核，在 boot.img 里是一个 gz 格式的压缩文件，大小 7M 左右（Android7.0）
+* ramdisk 是一个最小的文件系统映像，会在进入 Android 系统之前被映射到内存里，当做文件系统（硬盘）来使用。init.rc 在 ramdisk 的根目录下。
+
+#### 解压 boot.img ：
+1. Linux 工具： `git clone https://github.com/xiaolu/mkbootimg_tools.git`
+2. 运行： `./mkboot boot.img boot` ，把 boot.img 解压缩到 boot 文件夹
+
+1. `source build/envsetup.sh`
+	1. 该脚本本身会添加很多设备类型（通过调用 `add_lunch_combo` 函数），供后续调用 lunch 时使用
+	2. 还会查找 ./device 和 ./vendor 下的 vendorsetup.sh 文件(查找深度为4级目录)，找到后就执行它。它里面只有一行：`add_lunch_combo xxxx`，即把本设备加入到 lunch 可选择的列表里。
+	
+2. `lunch`
+	1. lunch 从你选择的设备中提取出 product 和 varient，导出为环境变量，供编译时使用
+
+			TARGET_PRODUCT=aosp_flounder
+			TARGET_BUILD_VARIANT=userdebug
+
 
 ###刷机脚本：
 
