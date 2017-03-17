@@ -51,9 +51,9 @@
 	* 在 `avformat_find_stream_info()` 里，根据 `time_base` 猜出了 `r_frame_rate`: {30000, 1001}
 	* 在 `avformat_find_stream_info()` 里，根据 `r_frame_rate` 猜出了 `avg_frame_rate`: {30000, 1001}
 
-* 对于 ts 文件来说，是通过 mpegts_read_header() 读到的 `time_base`，是从文件里读到的
+* 对于 ts 文件来说，是通过 `mpegts_read_header()` 读到的 `time_base`，是从文件里读到的
 * 另外，AVCodecContext 里有个 framerate 成员，是根据 ts 里的 ticks 和 scale 算出来的 xxxxx
-* 猜测 r_frame_rate 根据 如下两个值（按照注释里说的）：
+* 猜测 `r_frame_rate` 根据 如下两个值（按照注释里说的）：
 	1. time base： For example, if the time base is 1/90000
 	2. ticks：  and all frames have either approximately 3600 or 1800 timer ticks
 
