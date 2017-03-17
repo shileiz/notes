@@ -1,17 +1,12 @@
+##编译Android源码:
+* 结果是生成 boot.img，system.img，cache.img 等镜像文件。boot.img 是干嘛的，后文会有介绍。
+* 生成之后把这些镜像文件刷入 Android 手机即可以使用自己定制的系统了
+
+
 ###编译Android源码基本流程：
-* `source build/envsetup.sh`
-* `lunch`，选择对应的平台，我用 Nexus9,选择 `17. aosp_flounder-userdebug`，直接输入 17 回车
-* `make systemimage -j 16` 参数 -j 16 是使用16个线程编译，根据机器性能自行调节。
-* 编译完成后，出来的东西会在：`out/target/product/flounder`
-
-###编译Android源码遇到的问题：
-1. 报了个 gperf 没有的错，用 apt-get 装了一下就好了
-2. 说 java 版本不对，编 5.1.1 的源码要求是 java 1.7，而我的是 1.8，百度一下安装一下 open jdk1.7 即可
-3. 运行了 make clean 之后出了问题：因为在源码根目录运行了 make clean，所以删掉了很多东西。导致再次 make 的时候说找不到某个目标文件。百度了一下，根据结果去 framework/base 目录里运行了一下 `mmm .` (注意最后有个点)
-4. 运行 `mmm  .` 时又说 libz.so.1 找不到，又百度了一下，`sudo apt-get install lib32z1` 搞定。
-5. 再次运行 `mmm .` 又报了个 python 的错，大概是说 `subprocess.call([bisonExe, '-d', '-p', prefix, inputFile, '-o', outputCpp])` 的时候，找不到 bisonExe。解决方法是安装 bison：`sudo apt-get install bison `
-
-####编译源码之前需要安装的软件
+####1. 准备环境
+* 一台 Ubuntu，下载 Android 源码，具体方法不记了
+* Ubuntu 需要安装如下软件：
 * `sudo apt-get install git gnupg flex bison gperf build-essential zip curl libc6-dev libncurses5-dev:i386 x11proto-core-dev libx11-dev:i386 libreadline6-dev:i386 libgl1-mesa-dri:i386 libgl1-mesa-dev g++-multilib mingw32 tofrodos python-markdown libxml2-utils xsltproc zlib1g-dev:i386 dpkg-dev`
 * 安装到 `libgl1-mesa-dri:i386` 的时候报了个奇怪的错：
 
@@ -22,14 +17,36 @@
 * 百度到的解决方案： `sudo aptitude install libgl1-mesa-dri:i386`
 * 都安装成功后： `sudo ln -s /usr/lib/i386-linux-gnu/mesa/libGL.so.1 /usr/lib/i386-linux-gnu/libGL.so`
 
+####2. 开始编译
+* 下载并 cd 到源码根目录
+* `source build/envsetup.sh`
+* `lunch`，选择对应的平台，我用 Nexus9,选择 `17. aosp_flounder-userdebug`，直接输入 17 回车
+* `make -j16` 参数 -j16 是使用16个线程编译，根据机器性能自行调节。
+* 编译完成后，出来的东西会在：`out/target/product/flounder`
+
+####3. 刷机
+* 编译成功后进行刷机，刷机脚本如下：
+
+		:::shell
+		sudo adb reboot bootloader
+		sudo fastboot flash recovery recovery.img
+		sudo fastboot flash boot boot.img
+		sudo fastboot flash system system.img
+		#sudo ~/bin/fastboot flash vendor vendor.img 
+		sudo fastboot flash cache cache.img
+		sudo fastboot -w
+		sudo fastboot reboot
+
+###编译Android源码遇到的问题：
+* 说 java 版本不对，编 5.1.1 的源码要求是 java 1.7，而我的是 1.8，百度一下安装一下 open jdk1.7 即可
+* 在源码根目录运行了 make clean 之后出了问题：导致再次 make 的时候说找不到某个目标文件。百度了一下，根据结果去 framework/base 目录里运行了一下 `mmm .` (注意最后有个点)
+* 运行 `mmm  .` 时又说 libz.so.1 找不到，又百度了一下，`sudo apt-get install lib32z1` 搞定。
+
+
 ###m，mm，mmm的区别
-* 在任意目录下运行 m ，都是编译整个源码，生成 system.img
+* 在任意目录下运行 m ，都是编译整个源码，生成 system.img，boot.img 等
 * 在某个目录下运行 mm，只编译该目录，生成相应的模块。该路径下要有 Android.mk
 * mmm 后面可以跟路径，指定编译的模块，同样该路径下要有 Android.mk
-
-##编译Android源码:
-* 结果是生成 system.img，userdata.img，ramdisk.img	
-
 
 ### boot.img
 * boot.img 包含两部分：kernel 和 ramdisk。
@@ -40,36 +57,17 @@
 1. Linux 工具： `git clone https://github.com/xiaolu/mkbootimg_tools.git`
 2. 运行： `./mkboot boot.img boot` ，把 boot.img 解压缩到 boot 文件夹
 
-1. `source build/envsetup.sh`
-	1. 该脚本本身会添加很多设备类型（通过调用 `add_lunch_combo` 函数），供后续调用 lunch 时使用
-	2. 还会查找 ./device 和 ./vendor 下的 vendorsetup.sh 文件(查找深度为4级目录)，找到后就执行它。它里面只有一行：`add_lunch_combo xxxx`，即把本设备加入到 lunch 可选择的列表里。
-	
-2. `lunch`
-	1. lunch 从你选择的设备中提取出 product 和 varient，导出为环境变量，供编译时使用
 
-			TARGET_PRODUCT=aosp_flounder
-			TARGET_BUILD_VARIANT=userdebug
-
-
-###刷机脚本：
-
-	sudo adb reboot bootloader
-	sudo fastboot flash recovery recovery.img
-	sudo fastboot flash boot boot.img
-	sudo fastboot flash system system.img
-	#sudo ~/bin/fastboot flash vendor vendor.img 
-	sudo fastboot flash cache cache.img
-	sudo fastboot -w
-	sudo fastboot reboot
+## Android 6.0 之后引入的问题：enable-verity/disable-verity
 
 ###问题现象
-* 无法启动的手机，可以adb, 可以logcat，所以应该是进了 Android 系统了，不过系统 UI 起不来。
+* 刷上自己编译的系统后，无法启动的手机，可以adb, 可以logcat，所以应该是进了 Android 系统了，不过系统 UI 起不来。
 * 从logcat看, 应该是 data 分区没有挂载引起的系统起不来。
 
 ###问题分析
 * 其实根本问题就是开机后 /data 分区挂载不上
 * 因为系统第一次启动的时候，需要把一些自带 app 解压到 /data 分区里，如果你没有这个分区，那肯定启动不起来
-* 网上查了一些手动挂载分区的帖子，还下载了 busybox 准备手动挂载（busybox 里又 fdisk 等工具）
+* 网上查了一些手动挂载分区的帖子，还下载了 busybox 准备手动挂载（busybox 里有 fdisk 等工具）
 * 结果为了把 busybox push 到 /system 的时候，发现不能 adb remount，所以执行了adb disable-verity
 * 结果重启之后，成功进入系统了。。。。。
 * 所以根本原因应该是 `adb disable-verity` 造成的
@@ -105,7 +103,7 @@
 * 你应该注意到上面的分区里有两个分区都存有内核文件，就是boot和recovery，boot是正常启动流程会用到的内核文件，如果启动过程中发现有特殊按键，uboot就会读取recovery分区里的内核和ramdisk。这就是为什么你启动时按着某个组合键就会进入recovery程序。进入recovery模式以后，直接面对用户的是跑在内核上的recovery程序。这个时候除了recovery分区以外的其他分区你想写谁都可以了。recovery去读取rom文件，根据文件里的内容来更新系统，如果是img文件就直接dd到分区里，如果是文件夹就把文件里的东西copy到相应分区里(好像是这样)。更新完按正常启动过程重启机器就o了。
 * 内核文件在boot.img里的，boot.img是由内核文件和ramdisk.img组成的，刷在boot分区里。你如果打开一个rom文件，如果里面如果有boot.img，哪说明刷这个rom的时候它是要更新内核的。但一般第三方定制的rom是不会去动你的内核的，只刷system。所以你在里面找不到内核文件。如果你找不到system.img，那里面应该有一个叫system的文件夹吧。是img就dd到system分区，是文件夹就copy到system分区。 
 
-### 关于 oprofile
+## 关于 oprofile
 
 ####关于正常的 Oprofile（Linux 下的）：
 * 参考： [http://www.cnblogs.com/bangerlee/archive/2012/08/30/2659435.html](http://www.cnblogs.com/bangerlee/archive/2012/08/30/2659435.html)
@@ -189,7 +187,7 @@
 * 报了个奇奇怪怪的 mount：No such device，怀疑是因为内核没有开启 oprofile，开启内核的 oprofile 后再试。
 
 
-#### Android 源码与内核源码
+### Android 源码与内核源码
 * 正常从 google 下载的源码是不包含内核源码的
 * 内核以编译好的 image 方式提供
 * 比如，`/home/disk2/androidN/device/htc/flounder-kernel` 里就放着 flounder 这个设备的内核 image：Image.gz-dtb
