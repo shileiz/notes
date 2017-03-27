@@ -12,19 +12,18 @@
 	* 然后把你的工程打包成 apk，安装到手机。假设你的apk包名叫做 `com.yourpackage.xxx`
 	* 启动该 app，并查询出进程号，以备后续启动 gdbserver 使用：
 		* `adb shell ps | findstr "com.yourpackage"`，假设查到的 PID 为：6844，后面要用
-	* 把 gdbserver push 到手机上，gdbserver 在这里： `prebuilt/android-arm64/gdbserver/gdbserver`： 
+	* 把 gdbserver push 到手机上，gdbserver 在 NDK 的这里： `prebuilt/android-arm64/gdbserver/gdbserver`： 
 		* `adb push NDK-ROOT/prebuilt/android-arm64/gdbserver/gdbserver /data/data/com.yourpackage.xxx/gdbserver`
 		* `adb shell chmod 777 /data/data/com.yourpakage.xxx/gdbserver`
-	* 把手机上的某个 tcp 端口映射到一个本地文件，为启动 gdbserver / gdb 做准备：
-		* `adb forward tcp:5039 localfilesystem:/data/data/com.yourpakage.xxx/debug`
-		* 注意端口号可以自选，需要记住这个端口，后续启动 gdb 时就连接这个端口
-		* 映射到的文件也可以自定义，不过一定要放在 `/data/data/com.yourpakage.xxx` 里面，以免有读写权限问题
+	* 把PC上的 TCP 端口映射到手机上的 TCP 端口，为 gdb 和 gdbserver 通信做准备：
+		* `adb forward tcp:6669 tcp:5039`
+		* 注意：端口号可以自选，写在前面的是 PC 上的端口号，写在后面的是手机上的。需要记住这2个端口号，后续启动 gdbserver 时需要指定手机上的端口号，启动 gdb 时需要指定PC上的端口号。
 	* 启动 gdbserver:
-		* `adb shell run-as com.yourpackage.xxx /data/data/com.yourpackage.xxx/gdbserver +/data/data/com.yourpakage.xxx/debug --attach 6844`
-	* 注意，我们使用 com.yourpackage.xxx 用户启动 gdbserver，即 run-as。以便可以读写 `/data/data/com.yourpackage.xxx` 里的东西。
+		* `adb shell /data/data/com.yourpackage.xxx/gdbserver ：5039  --attach 6844`
 	* 注意，必须让 gdbserver 监听某个端口，这个端口就是之前我们映射的 tcp:5039
 	* 注意，启动时必须让 gdbserver attach 到某个进程上，就是我们之前 ps 出来的被 debug 进程。
-	* 启动 gdb， gdb.exe 在这里：`android-ndk-r13b\prebuilt\windows-x86_64\bin`：
+	* 启动 gdb:
+		*  gdb.exe 在这里：`android-ndk-r13b\prebuilt\windows-x86_64\bin`
 		* `gdb.exe`,进入 gdb 命令行
 		* `target remote 127.0.0.1:5039` 连接设备上的 gdbserver
 	* 至此，大功告成，终于可以在电脑上 gdb 手机上的程序了。不过 gdb 连上 gdbserver 后报了一大堆警告，说找不到库或者符号之类的。
