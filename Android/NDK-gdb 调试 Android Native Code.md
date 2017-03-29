@@ -1,5 +1,4 @@
-### 一. gdb 调试 PC 上的程序
-
+### 一. gdb 调试 PC 上的程序（实验环境为 Ubuntu 14）
 * 样例程序：
 
 		:::c
@@ -202,12 +201,15 @@
 * 可以看到，我们用 b add ，在 add 函数入口处下了一个断点。 c 命令后，程序停在了 add 的入口。
 * b 是 break 的简写，其参数可以跟函数名，也可以跟行号。
 
-### 二. gdb 调试 Android 上的纯 Native 程序
+### 二. gdb 调试 Android 上的纯 Native 程序（实验环境为 Win6-64位）
+* 首先要有一个被调试的程序，即能在 Android 设备上运行的命令行程序
+* 其次要能在 Android 设备上运行 gdb，对该程序进行调试
+* 这两个问题我们分别解决
 
 #### 1. 编译在 Android 上运行的纯 Native 程序
 * Android 上常见的程序都是以 app 的形式存在，即开发者把 java 和 C/C++ 源码编译好的程序打包一个 apk 安装到手机上运行
 * Android 上也可以有纯命令行的程序，仅由C/C++写成。其编译方式跟 Linux 类似，用 Android 的 makefile（Android.mk等） 和 Android 的编译工具链（NDK）制作即可。
-* 我们的源程序还用之前的那个，添加如下2个 makefile: Android.mk, Application.mk
+* 我们的源程序还用之前的那个 main.c ，添加如下2个 makefile: Android.mk, Application.mk
 * Android.mk：
 
 		LOCAL_PATH := $(call my-dir)
@@ -224,21 +226,109 @@
 * 注意，我们把 -g 参数加到了 Android.mk 里： `LOCAL_CFLAGS := -g`
 
 * 把 main.c Android.mk  Application.mk 放到一个叫 jni 的文件夹里
-* 在 jni 文件的外层运行 ndk-build
+* 在 jni 文件的外层运行 `ndk-build`
 * 生成的可执行文件叫 main，在 libs/arm64-v8a 里，把它 push 到手机的 /data/local 下
-* 给它可执行权限： `adb shell chmod 777 /data/loca/main`
+* 给它可执行权限： `adb shell chmod 777 /data/local/main`
+* 至此，可以在 Android 命令行下运行 main 程序了：
+
+		adb shell
+		cd /data/local
+		./main
 
 #### 2. gdb 的 target remote， gdbserver
-* gdbserver 是运行于手机上的一个可执行程序
-* gdb 就是正常的 gdb
-* 。。。。。
-* 不用start。。。
-* 我们会发现，gdb 虽然能连接上手机里的被调程序，但 gdb 告诉我们它无法抽取符号表：
+* 有了可以在 Android 上运行的命令行程序，下面就要用 gdb 调试它了。自然想到的方法就是找一个能在 Android 设备上运行的 gdb。这种方法不是不可行，网上也能找到从 gdb 源码编译出 Android 上可运行的 gdb 的方法。
+* 但今天要说的是更常用的一种方法： gdb 运行在 PC 端，被调试程序运行在 Android 设备上，PC 上的 gdb 通过远程调试的方式，去调试 Android 上的程序。
+* 要完成这一功能，必须有一个中介，把 PC 上的 gdb 和 Android 上的被调试程序联系起来，这个中介就是 gdbserver。
+* gdbserver 是运行于 Android 上的一个可执行程序，ndk 里包含了提前编译好的 gdbserver，直接 push 到手机上即可运行。
+* 另外，gdbserver 和 gdb 通信需要通过端口——串口或者TCP。这里我们使用 TCP。把 PC 的 TCP 端口和 Android 设备的 TCP 端口映射起来的方法是用 adb forward 命令： 
+
+		adb forward tcp:1234 tcp:5678
+
+* 以上命令把 PC 上的 1234 端口和手机上的 5678 端口映射起来。
+
+##### 2.1 具体步骤
+* 把 gdbserver push 到手机上，gdbserver 在 NDK 的这里： `NDK-ROOT/prebuilt/android-arm64/gdbserver/gdbserver`：
+
+		adb push NDK-ROOT/prebuilt/android-arm64/gdbserver/gdbserver /data/local/
+		adb shell chmod 777 /data/local/gdbserver
+
+* 把PC上的 TCP 端口映射到手机上的 TCP 端口，为 gdb 和 gdbserver 通信做准备(端口号可以自选)：
+
+		adb forward tcp:6669 tcp:5039
+
+* 启动 gdbserver：
+
+		adb shell
+		cd /data/local
+		./gdbserver :5039 ./main
+
+* 注意，启动 gdbserver 的同时指定了被调试的程序：./main
+* 可以看到有如下输出，说明 gdbserver 已经成功启动，并且把被调试程序启动了，打印了该进程的 pdi；并告诉我们 gdbserver 监听 5039 端口，等待 gdb 连接：
+
+		Process ./main created; pid = 4553
+		Listening on port 5039
+
+* 启动 PC 端的 gdb，Windows 上的 gdb 可以在 NDK 里找到：`NDK-ROOT\prebuilt\windows-x86_64\bin\gdb.exe`
+
+		cd NDK-ROOT\prebuilt\windows-x86_64\bin\gdb.exe
+		gdb
+
+* 连接 Android 上的 gdbserver：
+
+		target remote :6669
+
+* 可以看到 gdb 有如下输出，表示已经连上了被调试程序：
+
+		Remote debugging using :6669
+		Reading /data/local/main from remote target...
+		warning: File transfers from remote targets can be slow. Use "set sysroot" to access files locally instead.
+		Reading /data/local/main from remote target...
+		warning: A handler for the OS ABI "Cygwin" is not built into this configuration
+		of GDB.  Attempting to continue with the default aarch64 settings.
+		
+		Reading symbols from target:/data/local/main...(no debugging symbols found)...done.
+		Reading /system/bin/linker64 from remote target...
+		Reading /system/bin/linker64 from remote target...
+		Reading symbols from target:/system/bin/linker64...Reading /system/bin/.debug/linker64 from remote t
+		arget...
+		(no debugging symbols found)...done.
+		0x0000007fb7fde694 in __dl__start () from target:/system/bin/linker64
+		(gdb)
+
+* 而 gdbserver 也有输出，表示确实被 gdb 连上了：
+
+		Remote debugging from host 127.0.0.1
+
+* 我们会发现，gdb 在输出里告诉我们它无法抽取 main 的符号表：
 
 		Reading symbols from target:/data/local/main...(no debugging symbols found)...done.
-* 这是 ndk 的问题
 
-#### 3. ndk 编译时会自动去掉符号表的问题
+* 这是 ndk 的问题，它在编译生成 main 的时候把符号表 strip 掉了，我们后续解决这个问题。
+* 先来调试一下看看，毕竟没有符号表的程序也是可以调试的。
+
+		(gdb) b main
+		Breakpoint 1 at 0x55728245d0
+		(gdb) c
+		Continuing.
+		warning: Could not load shared library symbols for libc.so.
+		Do you need "set solib-search-path" or "set sysroot"?
+		warning: Could not load shared library symbols for libm.so.
+		Do you need "set solib-search-path" or "set sysroot"?
+		warning: Could not load shared library symbols for libstdc++.so.
+		Do you need "set solib-search-path" or "set sysroot"?
+		warning: Could not load shared library symbols for libnetd_client.so.
+		Do you need "set solib-search-path" or "set sysroot"?
+		
+		Breakpoint 1, 0x00000055728245d0 in main ()
+		(gdb) l
+		No symbol table is loaded.  Use the "file" command.
+		(gdb)
+
+* 注意，gdbserver 已经启动了被调试进程，所以我们这里不用再 start 了，直接用 c 命令即可。
+* 可以看到是可以调试的，只不过 l 命令无法列出源代码，gdb 给了错误提示，没有符号表。 
+* 我们下面来解决符号表的问题。
+
+##### 2.2 ndk 编译时会自动 strip 掉符号表的问题
 * 注意，nkd 在编译时，最后默认会做 strip，把符号表从可执行文件中移除，即便你加了参数 NDKDEBUG=1
 * 用 V=1 参数可以看到 ndk 在编译的过程中都干了些什么：
 
@@ -266,12 +356,12 @@
 		rch64-linux-android-strip --strip-unneeded  ./libs/arm64-v8a/main
 
 * 注意其中的最后一行，ndk 调用了 strip，传的参数是 --strip-unneeded，这会去掉可执行程序中的符号表，以至于 gdb 无法抽取符号表。
-* 解决方式： 不用 strip 后的，去 `obj\local\arm64-v8a` 里把 strip 之前的可执行文件推到手机里运行、调试。
+* 解决方式： 不用 strip 后的可执行程序。去 `obj\local\arm64-v8a` 里把 strip 之前的可执行文件推到手机里运行、调试。
 * 用 readelf -s 验证是否有符号表：
-	* MSYS2 带了 readelf。-s 选项是查看符号表，
+	* MSYS2 带了 readelf，-s 选项是查看符号表。
 	* 被 strip 过的可执行文件没有 '.symtab'表，只有 '.dynsym' ，输出结果如下：
 
-			$ readelf.exe  -s main
+			$ readelf -s libs/arm64-v8a/main
 			
 			Symbol table '.dynsym' contains 17 entries:
 			   Num:    Value          Size Type    Bind   Vis      Ndx Name
@@ -293,9 +383,10 @@
 			    15: 00000000000005c0    40 FUNC    GLOBAL DEFAULT    8 main
 			    16: 0000000000010d88     8 OBJECT  GLOBAL DEFAULT   12 __PREINIT_ARRAY__
 
+
 	* 没有被 strip 过的可执行文件，输出结果如下：
 
-			$ readelf.exe -s main
+			$ readelf -s obj/local/arm64-v8a/main
 			
 			Symbol table '.dynsym' contains 17 entries:
 			   Num:    Value          Size Type    Bind   Vis      Ndx Name
@@ -369,7 +460,7 @@
 			    47: 0000000000010fd8     0 OBJECT  LOCAL  DEFAULT  ABS _GLOBAL_OFFSET_TABLE_
 			    48: 0000000000011008     0 NOTYPE  LOCAL  DEFAULT   17 _end
 			    49: 0000000000000590     0 NOTYPE  LOCAL  DEFAULT    7 $x
-			    50: 00000000000005f0    24 FUNC    GLOBAL HIDDEN     8 __atexit_handler_wrap                         per
+			    50: 00000000000005f0    24 FUNC    GLOBAL HIDDEN     8 __atexit_handler_wrap                           per
 			    51: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND printf
 			    52: 0000000000010da8     8 OBJECT  GLOBAL DEFAULT   14 __FINI_ARRAY__
 			    53: 0000000000011000     8 OBJECT  GLOBAL HIDDEN    17 __dso_handle
@@ -381,6 +472,68 @@
 			    59: 0000000000000648    24 FUNC    GLOBAL HIDDEN     8 atexit
 			    60: 0000000000010d88     8 OBJECT  GLOBAL DEFAULT   12 __PREINIT_ARRAY__
 
+* 把带着符号表的 main 推到手机上再次调试
+
+		adb push obj\local\arm64-v8a\main /data/local/		
+
+* 首先 gdb 关于找不到符号表的输出已经没有了，变成了正常的输出：
+
+		Reading symbols from target:/data/local/main...done.
+
+* 试一下 l 命令，已经可以正常输出源代码：
+
+		(gdb) l
+		1       #include <stdio.h>
+		2       int add(int x, int y)
+		3       {
+		4               int sum;
+		5               sum = x+ y;
+		6               return sum;
+		7       }
+		8
+		9       int main(int argc, char* argv[])
+		10      {
+
+
+##### 2.3 libc.so , libstdc++.so 等问题：有待解决
+* 我们在gdb运行 c 命令时，会得到如下提示：
+
+		warning: Could not load shared library symbols for libc.so.
+		Do you need "set solib-search-path" or "set sysroot"?
+
+* 如何解决？？
+
+##### 2.4 无法下断点的问题：有待解决
+* b add 不行： 跟 main 的符号表里没有 add 有关系。PC 上的可执行程序，查看符号表，可以看到符号 add。 而 ARM 上的则不行。运行 b add 提示：
+
+		(gdb) b add
+		Function "add" not defined.
+		Make breakpoint pending on future shared library load? (y or [n])
+
+* b 行号 也不行，这就比较奇怪
+
+		(gdb) b 5
+		Breakpoint 1 at 0x555c5a55c0: file jni/main.c, line 5.
+		(gdb) c
+		Continuing.
+		warning: Could not load shared library symbols for libc.so.
+		Do you need "set solib-search-path" or "set sysroot"?
+		warning: Could not load shared library symbols for libm.so.
+		Do you need "set solib-search-path" or "set sysroot"?
+		warning: Could not load shared library symbols for libstdc++.so.
+		Do you need "set solib-search-path" or "set sysroot"?
+		warning: Could not load shared library symbols for libnetd_client.so.
+		Do you need "set solib-search-path" or "set sysroot"?
+		
+		Breakpoint 1, main (argc=1, argv=0x7ffffff998) at jni/main.c:10
+		10      {
+		(gdb) c
+		Continuing.
+		[Inferior 1 (process 4621) exited normally]
+		/data/local/main: No such file or directory.
+		(gdb)
+
+* 虽然 b 5 的时候提示成功下了断点，但 c 之后还是直接退出了，没有命中断点。
 
 ### 三. gdb 调试 Android 上的 app
 
