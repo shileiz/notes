@@ -201,10 +201,11 @@
 * 可以看到，我们用 b add ，在 add 函数入口处下了一个断点。 c 命令后，程序停在了 add 的入口。
 * b 是 break 的简写，其参数可以跟函数名，也可以跟行号。
 
-### 二. gdb 调试 Android 上的纯 Native 程序（实验环境为 Win6-64位）
+### 二. gdb 调试 Android 上的纯 Native 程序（实验环境为 Win6-64位，NDK 版本为 r10d 和 r13b）
 * 首先要有一个被调试的程序，即能在 Android 设备上运行的命令行程序
 * 其次要能在 Android 设备上运行 gdb，对该程序进行调试
 * 这两个问题我们分别解决
+* 注意： 以下实验分别在 NDK r10d 和 r13b 上进行了，有相同的结果。 尽管 r13b 把默认的编译器由 gcc 换成了 clang。
 
 #### 1. 编译在 Android 上运行的纯 Native 程序
 * Android 上常见的程序都是以 app 的形式存在，即开发者把 java 和 C/C++ 源码编译好的程序打包一个 apk 安装到手机上运行
@@ -504,12 +505,43 @@
 * 如何解决？？
 
 ##### 2.4 无法下断点的问题：有待解决
-* b add 不行： 跟 main 的符号表里没有 add 有关系。PC 上的可执行程序，查看符号表，可以看到符号 add。 而 ARM 上的则不行。运行 b add 提示：
+
+##### 2.4.1 符号表里没有 add 函数的问题：-Wl,--gc-sections
+* 运行 b add 提示：
 
 		(gdb) b add
 		Function "add" not defined.
 		Make breakpoint pending on future shared library load? (y or [n])
 
+* 仔细观察 `readelf -s main` 输出的符号表，里面确实没有 add 这个符号。 如果对 PC 上编译出来的 app 用 `readelf -s` 看一下，会发现它的符号表里是有 add 的。 这是为什么呢？
+* 用 readelf -s 看一下 main.o， 里面是有 add 的，说明问题不在编译阶段，而在连接阶段。
+* 对 ndk-build V=1 的输出进行观察，发现链接阶段有这个参数： `-Wl,--gc-sections`
+* 手动重新运行该链接命令，把这个参数去掉，编译出来的 main 的符号表里就有 add 了
+* 百度了一下这个参数的意义，它的作用是去掉那些只定义了而没有使用的 section，而且还得配合编译阶段的 -ffunction-sections 参数，使得编译器为每个函数都单独分配一个 section 才行。
+* 但这里不知道为什么会把符号表里的函数名给搞没了，没有深究。
+* 总之手动编译后，把出来的main再推到手机上进行调试，就可以 b add 了。
+
+##### 2.4.1 无法命中断点
+* 设置 add 的断点后用 c 命令，结果如下：
+
+		(gdb) b add
+		Note: breakpoint 1 also set at pc 0x55847b9718.
+		Breakpoint 2 at 0x55847b9718: file jni\main.c, line 5.
+		(gdb) c
+		Continuing.
+		warning: Could not load shared library symbols for libc.so.
+		Do you need "set solib-search-path" or "set sysroot"?
+		warning: Could not load shared library symbols for libstdc++.so.
+		Do you need "set solib-search-path" or "set sysroot"?
+		warning: Could not load shared library symbols for libm.so.
+		Do you need "set solib-search-path" or "set sysroot"?
+		warning: Could not load shared library symbols for libnetd_client.so.
+		Do you need "set solib-search-path" or "set sysroot"?
+		[Inferior 1 (process 5256) exited normally]
+		/data/local/main: No such file or directory.
+		(gdb)
+
+##### 2.4.1 
 * b 行号 也不行，这就比较奇怪
 
 		(gdb) b 5

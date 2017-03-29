@@ -39,6 +39,9 @@
 
 ###编译Android源码遇到的问题：
 * 说 java 版本不对，编 5.1.1 的源码要求是 java 1.7，而我的是 1.8，百度一下安装一下 open jdk1.7 即可
+	* 另外，已经安装了多个版本的 Ubuntu 切换java版本的方法：
+	* `sudo update-alternatives --config java`
+	* `sudo update-alternatives --config javac`
 * 在源码根目录运行了 make clean 之后出了问题：导致再次 make 的时候说找不到某个目标文件。百度了一下，根据结果去 framework/base 目录里运行了一下 `mmm .` (注意最后有个点)
 * 运行 `mmm  .` 时又说 libz.so.1 找不到，又百度了一下，`sudo apt-get install lib32z1` 搞定。
 
