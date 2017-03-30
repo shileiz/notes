@@ -46,6 +46,28 @@
 * 运行 `mmm  .` 时又说 libz.so.1 找不到，又百度了一下，`sudo apt-get install lib32z1` 搞定。
 
 
+### 编译 7.0.0_r1 遇到新问题： Try increasing heap size with java option '-Xmx<size>'.
+
+* 运行 make -j16 ，进行了很久之后报错如下
+
+		[ 70% 22471/31781] Building with Jack: out/target/common/obj/JAVA_LIBRARIES/framework_intermediates/with-local/classes.dex
+		FAILED: /bin/bash out/target/common/obj/JAVA_LIBRARIES/framework_intermediates/with-local/classes.dex.rsp
+		Out of memory error (version 1.2-rc4 'Carnac' (298900 f95d7bdecfceb327f9d201a1348397ed8a843843 by android-jack-team@google.com)).
+		GC overhead limit exceeded.
+		Try increasing heap size with java option '-Xmx<size>'.
+		Warning: This may have produced partial or corrupted output.
+		[ 70% 22471/31781] Building with Jack: out/target/common/obj/APPS/VolantisLayout_intermediates/with-local/classes.dex
+		ninja: build stopped: subcommand failed.
+		make: *** [ninja_wrapper] 错误 1
+
+* 百度了一下，说是内存不足，需要这样：
+
+		export JACK_SERVER_VM_ARGUMENTS="-Dfile.encoding=UTF-8 -XX:+TieredCompilation -Xmx4g"	
+		./prebuilts/sdk/tools/jack-admin kill-server 
+		./prebuilts/sdk/tools/jack-admin start-server
+
+* 重新 make -j16
+
 ###m，mm，mmm的区别
 * 在任意目录下运行 m ，都是编译整个源码，生成 system.img，boot.img 等
 * 在某个目录下运行 mm，只编译该目录，生成相应的模块。该路径下要有 Android.mk
@@ -304,3 +326,14 @@ cd ../flounder-kernel/
 
 
 
+----
+
+### 修改编译 Android 源码的默认选项：即运行 mm 时，默认被加上的编译选项
+* 修改 `build/core/config.mk` 即可，mm 默认加的编译选项都在这里
+* 比如 `TARGET_ERROR_FLAGS := -Werror=return-type -Werror=non-virtual-dtor -Werror=address -Werror=sequence-point`
+* 这句的意思是，把 `return-type non-virtual-dtor address sequence-point` 这些 Warning 都当成 error
+* 比如我们不想把 `non-virtual-dtor` 当成 error，则可以把以上这行改成：
+* `TARGET_ERROR_FLAGS := -Werror=return-type -Werror=address -Werror=sequence-point`
+* 如果不想修改 Android 默认的东西，也可以不改 `build/core/config.mk`
+* 只需在模块的 Android.mk 里加上相反的选项来覆盖掉默认的就可以了，比如我们在自己模块的 Android.mk 里写上：
+* `LOCAL_CFLAGS += -Wno-error=non-virtual-dtor`
