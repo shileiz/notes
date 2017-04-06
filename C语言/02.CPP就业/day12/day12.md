@@ -113,4 +113,59 @@
 
 		'Person' has virtual functions but non-virtual destructor
 
-## 
+## 继承中的重载
+
+### 子类重载了父类的函数
+* C++ 中，子类如果重载了父类的函数，注意不是重写，那么子类对象在调用该函数的时候，只能调用自己重载过的版本，父类的版本将无法再直接调用。
+* 如果想调用父类版本，需要用 :: 明确指出是父类的函数。
+* Java 则不是这样，Java 中子类重载过的函数照样可以调到父类的版本。
+* C++ 的例子：
+
+		:::c++
+		#include<stdio.h>
+		class A {
+		public:
+			void go() {
+				printf("A go\n");
+			}
+		};
+		
+		class B :public A {
+		public:
+			void go(int i) {
+				printf("B go\n");
+			}
+		};
+		
+		void main(void)
+		{
+				B *b = new B();
+				//b->go(); // Error
+				b->go(100); // B go
+				b->A::go();// A go
+				getchar();
+		}
+
+* Java 的例子：
+
+		:::JAVA
+		class A{
+			public void go(){
+				System.out.println("A go");
+			}
+		}
+		
+		class B extends A{
+			public void go(int i){
+				System.out.println("B go");
+			}
+		}
+		
+		public class JavaTest{
+			public static void main(String argv[]){
+				B b = new B();
+				b.go(); // A go
+				b.go(100); // B go
+			}
+			
+
