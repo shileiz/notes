@@ -579,7 +579,7 @@
 	* 运行在 host 上的 gdb：host 可以是 Windows 也可以是 Linux。对于 Windows 来说，它就是 google 随 NDK 一起提供的 gdb.exe。
 	* 运行在 Android 设备上的 gdbserver，用于跟 host 通信。gdbserver 是一个 google 随 NDK 提供的可以在 Android 上执行的命令行程序。
 	* 运行在 Android 设备上的被 debug 的进程，大多数情况下即你做的apk
-* 如果不适用 Google 提供的这层包装，我们可以手动用 gdb 调试（以 NDK r13b 为例）：
+* 如果不使用 Google 提供的这层包装，我们可以手动用 gdb 调试（以 NDK r13b 为例）：
 	* 编译你工程的 native 部分时，加上 NDKDEBUG=1 选项： 
 		* `ndk-build NDKDEBUG=1`
 	* 然后把你的工程打包成 apk，安装到手机。假设你的apk包名叫做 `com.yourpackage.xxx`
