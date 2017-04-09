@@ -139,3 +139,8 @@
 	* private 继承把父类的public和protected成员在子类里都变成 private，private 子类不可见。
 * C++ 无论哪种继承，父类的 private 成员子类都不可见。
 
+## 多继承
+* 多继承据老师说企业中并不常用，所以没听。
+
+
+
