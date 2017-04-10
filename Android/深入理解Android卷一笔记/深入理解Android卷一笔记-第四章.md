@@ -1,7 +1,7 @@
 ##写在前面
 
 * zygote 是在一个 Android Linux 上的一个进程
-* zygote 进程中启动的过程中，fork 出了 system\_server 进程
+* zygote 进程在启动的过程中，fork 出了 system\_server 进程
 * zygote 进程稳定后，就在自己的主循环里等待客户端连接自己执行命令
 * system\_server 进程里面跑着很多 Android 系统的 Service，包括 ActivityManagerService
 * 用户 app 进程，都是从 zygote 进程 fork 出来的
