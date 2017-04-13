@@ -33,7 +33,41 @@
 ---
 
 ## 理论基础
-* 把 Binder 理解为一个管道，一根网线，一个硬件，它能连通两个进程。
+* 把 Binder 理解为一个管道，它能连通两个进程，一个进程是 Server 端，另一个是客户端。
+* Android 提供了一个 ServiceManager，服务端向它注册服务，客户端从他得到服务。
+* 注册服务使用 ServiceManager 的 addService() 函数，原型如下
+
+		status_t addService(const String16& name, const sp<IBinder>& service)
+
+* 得到服务使用 ServiceManager 的 getService() 函数，原型如下
+
+		sp<IBinder> getService(constString16& name)
+
+* 注册服务需要提供2个东西：
+	* 服务名称，是个字符串。
+	* 指向务本身的指针，是个 IBinder 类型的指针。
+* 其实服务本身肯定不是 Binder 类型的，服务是要提供业务能力的。只不过，在 ServiceManager 看来，所有服务都是一个 Binder，ServiceManager 只看到管道，只负责链接，不关心业务。所以真实注册服务的时候，第二个参数都是一个既继承自 IBinder 又继承自业务类的对象指针。
+* 比如我们注册一个自己的服务：
+
+		ServiceManager::addService("my.serv", new MyWorker()); // MyWorker 类必须在能提供业务函数的同时，继承自 IBinder
+
+* 以上语句在 ServiceManager 里注册了一个名为 "my.serv" 的服务，该服务的提供者就是一个 MyWorker 对象。以后客户端拿到该服务，就能使用 MyWorker 对象的业务函数了，比如 dowork() 之类的。
+* 取得服务只需要提供服务名称字符串，返回值同样是个 IBinder 指针。同理，因为 ServiceManager 只认 Binder，不理业务。
+* 比如我们得到刚才注册的那个服务：
+
+		sp<IBinder> binder = ServiceManager::getService("my.serv");
+
+* 以上语句从 ServiceManager 处得到了刚才注册的 my.serv 这个服务，在客户端看来，它就像是一个 MyWorker 对象的指针，我们可以直接调用它的业务函数，比如：
+
+		binder->dowork();
+
+* 但这样做似乎不妥，因为 binder 是 IBinder 类型指针，没有 dowork() 这个业务函数。那么怎么办呢？ 我们在下一小结“客户端视角”来解决。
+
+* 另外注意，addService() 和 getService() 并不是静态函数，不能直接 `ServiceManager::` 调用，上面的代码只是示意。实际使用时，我们使用 Android 提供的 defaultServiceManager() 函数来得到一个 ServiceManager 的实例，然后通过实例调用：
+
+		sp<IServiceManager>sm = defaultServiceManager();
+		sm->addService("my.serv", new MyWorker());
+		sm->getService("my.serv");
 
 ### 客户端视角
 * 假设有个类 IWorker，有个 IWorker 对象在服务端进程里，客户端进程可以让它干活，通过 Binder。
@@ -62,25 +96,17 @@
 
 ### 服务端视角
 * 服务端需要做的事情很多，他需要：
-	* 定义 IWorker 类
-	* 实现客户端能看见的函数：包括 work(), stop() 这种业务函数，还包括 asInterface() 这种用于 Binder 通信的函数。
-	* 实现客户端看不到的函数：基本都是用于 Binder 通信的
-	* 为了能逻辑更加清晰，定义若干子类，在子类里实现各函数。
+	* 定义 IWorker 类；
+	* 弄一个用于 Server 端的实现类 Worker，实现 IWorker 的业务函数 work(), stop(), 真正的干活。
+	* 弄一个用于客户端的实现类 BpWorker，实现 IWorker 的业务函数 work(), stop(), 不真的干活而是给 Server 发命令；
+	* BpWorker 里实现一个 static 函数 asInterface()，
+	* 在服务端主程序里，向 ServiceManager 注册一个叫 myworker 的服务
 * 服务端几乎要干所有的事情，所以直接看例子。 
 
 
 ## 实例1：基于 Binder 的 IPC —— 纯 Native版
 
-### 1. 预置条件
-* Android 系统已经存在，Binder、ServiceManager 可用
-* Android 系统为我们准备的 `BnInterface<INTERFACE>` 和 `BpInterface<INTERFACE>` 模板类可用
-
-### 2. 目标
-* 实现一个纯 C/C++ 的 Server 进程，进程里有个 Worker 对象，负责干活。
-* 实现一个纯 C/C++ 的 Client 进程，远程调用 Server 进程里 Worker 对象的函数，让他干活/停止干活。
-
-### 3. 具体步骤
-* 搞一个接口类 IWorker，虚函数 work(), stop()，交给服务端和客户端的具体类分别去实现。服务端的 work() 就是干活，客户端的 work() 就是给服务端发消息，让服务端调用 work() 干活。
+* 接口类 IWorker，纯虚函数 work(), stop()，交给服务端和客户端的具体类分别去实现。服务端的 work() 就是干活，客户端的 work() 就是给服务端发消息，让服务端调用 work() 干活。
 
 		:::C++
 		/* IWorker.h */
@@ -89,6 +115,7 @@
 		public:
 		  virtual void work() = 0;
 		  virtual void stop() = 0;
+		  static sp<IWorker> asInterface(const sp<IBinder>& obj);
 		}
 
 
