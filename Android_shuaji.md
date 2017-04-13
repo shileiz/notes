@@ -329,7 +329,7 @@ cd ../flounder-kernel/
 ----
 
 ### 修改编译 Android 源码的默认选项：即运行 mm 时，默认被加上的编译选项
-* 修改 `build/core/config.mk` 即可，mm 默认加的编译选项都在这里
+* 修改 `build/core/config.mk` 即可，mm 默认加的编译选项都在这里。
 * 比如 `TARGET_ERROR_FLAGS := -Werror=return-type -Werror=non-virtual-dtor -Werror=address -Werror=sequence-point`
 * 这句的意思是，把 `return-type non-virtual-dtor address sequence-point` 这些 Warning 都当成 error
 * 比如我们不想把 `non-virtual-dtor` 当成 error，则可以把以上这行改成：
@@ -337,3 +337,5 @@ cd ../flounder-kernel/
 * 如果不想修改 Android 默认的东西，也可以不改 `build/core/config.mk`
 * 只需在模块的 Android.mk 里加上相反的选项来覆盖掉默认的就可以了，比如我们在自己模块的 Android.mk 里写上：
 * `LOCAL_CFLAGS += -Wno-error=non-virtual-dtor`
+
+* 从 Android-o 开始，`build/core/config.mk` 里找不到 `TARGET_ERROR_FLAGS` 了，所以只能用第二种方法修改了，即改自己的工程的 Android.mk.
