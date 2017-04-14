@@ -33,180 +33,251 @@
 ---
 
 ## 理论基础
+
+### 1. 服务是什么？
+* 可以简单的把服务理解为一个进程里的对象，它能干活，而且能被别的进程“引用”。
+* 比如你搞了个进程，里面 new 了一个 MyWorker 对象，该对象可以被其他进程“引用”，并调用它的 `do_work()` 函数来干活。那么这个对象就是一个服务。
+* 一个对象想成为“服务”的必要条件是能被其他进程引用，在 Binder 系统里，代表着它必须是个 IBinder 类型的对象。
+
+### 2. Binder 是什么？
 * 把 Binder 理解为一个管道，它能连通两个进程，一个进程是 Server 端，另一个是客户端。
+* 甚至在设计服务和使用服务的程序员看来，Binder 就是硬件。
+
+### 3. ServiceManager 是什么？
 * Android 提供了一个 ServiceManager，服务端向它注册服务，客户端从他得到服务。
+* ServiceManager 只认识 Binder，向它注册服务时，要提供 IBinder 类型的对象；向它获取服务时，返回的是 IBinder 类型的指针。
+
+![](ch6_Binder_ServiceManager.png)
+
+* ServiceManager、Binder、服务、客户端进程、服务端进程的关系如上图所示。
+
+#### 3.1 注册服务
 * 注册服务使用 ServiceManager 的 addService() 函数，原型如下
 
 		status_t addService(const String16& name, const sp<IBinder>& service)
 
+* 注册服务需要提供2个东西：
+	* 服务名称，是个字符串。
+	* 指向务本身的指针，是个 IBinder 类型的指针。
+* 其实服务本身肯定不只是 IBinder 类型的，服务是要提供业务能力的，所以肯定也是 MyWorker 类型的。只不过，在 ServiceManager 看来，所有服务都是 IBinder。ServiceManager 只看到管道，只负责链接，不关心业务。
+* 真实注册服务的时候，第二个参数都是一个既继承自 IBinder 又继承自业务类（比如叫 IMyWorker）的对象。
+* IBinder 确保可以跨进程通信，即确保可以被 addService() 接收。IMyWorker 确保提供业务函数，比如 `do_work()`。
+* 比如我们注册一个自己的服务：
+
+		ServiceManager::addService("my.serv", new MyWorker()); 
+		// MyWorker 同时继承自 IBinder 和 IMyWorker
+
+* 以上语句在 ServiceManager 里注册了一个名为 "my.serv" 的服务，该服务的提供者就是一个 MyWorker 对象。以后客户端拿到该服务，就能使用 MyWorker 对象的业务函数了，比如 `do_work()` 之类的。
+* 另外注意，addService() 并不是静态函数，不能直接 `ServiceManager::` 调用，上面的代码只是示意。实际使用时，我们使用 Android 提供的 defaultServiceManager() 函数来得到一个 ServiceManager 的实例，然后通过实例调用：
+
+		sp<IServiceManager>sm = defaultServiceManager();
+		sm->addService("my.serv", new MyWorker());
+
+#### 3.2 得到服务
 * 得到服务使用 ServiceManager 的 getService() 函数，原型如下
 
 		sp<IBinder> getService(constString16& name)
 
-* 注册服务需要提供2个东西：
-	* 服务名称，是个字符串。
-	* 指向务本身的指针，是个 IBinder 类型的指针。
-* 其实服务本身肯定不是 Binder 类型的，服务是要提供业务能力的。只不过，在 ServiceManager 看来，所有服务都是一个 Binder，ServiceManager 只看到管道，只负责链接，不关心业务。所以真实注册服务的时候，第二个参数都是一个既继承自 IBinder 又继承自业务类的对象指针。
-* 比如我们注册一个自己的服务：
-
-		ServiceManager::addService("my.serv", new MyWorker()); // MyWorker 类必须在能提供业务函数的同时，继承自 IBinder
-
-* 以上语句在 ServiceManager 里注册了一个名为 "my.serv" 的服务，该服务的提供者就是一个 MyWorker 对象。以后客户端拿到该服务，就能使用 MyWorker 对象的业务函数了，比如 dowork() 之类的。
-* 取得服务只需要提供服务名称字符串，返回值同样是个 IBinder 指针。同理，因为 ServiceManager 只认 Binder，不理业务。
+* 取得服务只需要提供服务名称字符串，返回值是个 IBinder 指针。
 * 比如我们得到刚才注册的那个服务：
 
-		sp<IBinder> binder = ServiceManager::getService("my.serv");
+		sp<IServiceManager>sm = defaultServiceManager();
+		sp<IBinder> binder = sm->getService("my.serv");
 
 * 以上语句从 ServiceManager 处得到了刚才注册的 my.serv 这个服务，在客户端看来，它就像是一个 MyWorker 对象的指针，我们可以直接调用它的业务函数，比如：
 
-		binder->dowork();
+		binder->do_work();
 
-* 但这样做似乎不妥，因为 binder 是 IBinder 类型指针，没有 dowork() 这个业务函数。那么怎么办呢？ 我们在下一小结“客户端视角”来解决。
+* 但这样做似乎不妥，因为 binder 是 IBinder 类型指针，没有 `do_work()` 这个业务函数。那么怎么办呢？ 
+* `do_work()` 是 IMyWorker 类的业务函数，IMyWorker 类有义务提供一个函数，让客户端能把连接到自己的 IBinder 指针转换成 IMyWorker 指针。这个函数一般叫做 asInterface()，原型如下：
 
-* 另外注意，addService() 和 getService() 并不是静态函数，不能直接 `ServiceManager::` 调用，上面的代码只是示意。实际使用时，我们使用 Android 提供的 defaultServiceManager() 函数来得到一个 ServiceManager 的实例，然后通过实例调用：
+		sp<IMyWorker> IMyWorker::asInterface(sp<IBinder>& binder)
 
-		sp<IServiceManager>sm = defaultServiceManager();
-		sm->addService("my.serv", new MyWorker());
-		sm->getService("my.serv");
+* 该函数以 binder 为参数，返回一个 IMyWorker 对象。IMyWorker 对象虽有业务函数，但也并非真的干活，它只是指挥远端进程的 MyWorker 干活。
 
-### 客户端视角
-* 假设有个类 IWorker，有个 IWorker 对象在服务端进程里，客户端进程可以让它干活，通过 Binder。
-* 客户端感觉不到自己是在跨进程，在客户端进程看来，就像是自己 new 出来一个 IWorker 对象一样。
-* 只不过不是 new 出来，而是从 ServiceManager 那 get 一个：调用 ServiceManager 的 `getService()` ：
+![](ch6_client.png)
 
-		sp<IBinder> binder = ServiceManager->getService("myworker"）// 只是示意代码，实际要先搞个 ServiceManger 的对象再调用 getService()
+* 这样，客户端就可以调用服务端的业务函数了：
 
-* 注意：字符串 "myworker" 是服务端进程在 ServiceManager 里注册好的，客户端需要知道这个名字。
-* 注意：从 ServiceManager 那里 get 到的东西，只能是 `sp<IBinder>` 类型，因为 getService() 返回 `sp<IBinder>` 类型。这个 binder 指向服务端进程的 IWorker 对象。
-* 客户端需要利用 `IWorker::asInterface(sp<IBinder>& binder)` 把得到的 `sp<IBinder>` ，转换成 `sp<IWorker>` 类型：
+		sp<IBinder> binder = ServiceManager::getService("my.serv");
+		sp<IMyWorker> wk = IMyWorker::asInterface(binder)；
+		wk->do_work();
 
-		sp<IWorker> wk = IWorker::asInterface(sp<IBinder>& binder)
 
-* 即 IWorker 要为客户端提供一个函数 asInterface()，能把 IBinder 类型转换成自己的类型。
-* 转换完成后，客户端就可以调用它的业务函数了，比如: 
-
-		wk->work();
-		wk->stop();
- 
+### 4. 理论基础回顾：客户端视角
+* 客户端进程通过 ServiceManager 和 IMyWorker 类的 asInterface() 函数，能“看到”服务进程里的 IMyWorker 对象。
+* 客户端感觉不到自己是在跨进程，在客户端进程看来，就像是自己 new 出来一个 IMyWorker 对象一样。只不过不是 new 出来，而是从 ServiceManager 那 get 一个。
 * 客户端看到的 IWorker 类是这样：
 
-![](ch6_IWorker.png)
+![](ch6_IMyWorker.png)
 
-* 小结：客户端需要做的事情很少，仅需get一个binder，转换成逻辑上的IWoker“对象”，然后调用该对象的业务函数即可。
+* 小结：客户端需要做的事情很少，仅需get一个binder，转换成逻辑上的 IMyWoker “对象”，然后调用该对象的业务函数即可。
+* 所有这些功能，都是在服务端的代码里实现的。
 
-### 服务端视角
-* 服务端需要做的事情很多，他需要：
-	* 定义 IWorker 类；
-	* 弄一个用于 Server 端的实现类 Worker，实现 IWorker 的业务函数 work(), stop(), 真正的干活。
-	* 弄一个用于客户端的实现类 BpWorker，实现 IWorker 的业务函数 work(), stop(), 不真的干活而是给 Server 发命令；
-	* BpWorker 里实现一个 static 函数 asInterface()，
-	* 在服务端主程序里，向 ServiceManager 注册一个叫 myworker 的服务
-* 服务端几乎要干所有的事情，所以直接看例子。 
+## 代码实现
+* 代码的实现完全是服务端的事情，尽管 asInterface() 函数是只有客户端才会使用的，但要由服务端提供。
 
+#### 1. 定义 IMyWorker 类
 
-## 实例1：基于 Binder 的 IPC —— 纯 Native版
+	:::C++
+	/* IMyWorker.h */
+	class IMyWorker: public IInterface
+	{
+	public:
+	  virtual void do_work() = 0;
+	  virtual void stop_work() = 0;
+	  static sp<IMyWorker> asInterface(const sp<IBinder>& obj);
+	}
 
-* 接口类 IWorker，纯虚函数 work(), stop()，交给服务端和客户端的具体类分别去实现。服务端的 work() 就是干活，客户端的 work() 就是给服务端发消息，让服务端调用 work() 干活。
+#### 2. 用子类 MyWorker 实现业务函数
+* 子类 MyWorker 实现 IMyWorker 的业务函数 `do_work()`, `stop_work()`, 真正的干活。它同时还要继承自 IBinder，以便可以被添加到 ServiceManager 里。
 
-		:::C++
-		/* IWorker.h */
-		class IWorker: public IInterface
-		{
-		public:
-		  virtual void work() = 0;
-		  virtual void stop() = 0;
-		  static sp<IWorker> asInterface(const sp<IBinder>& obj);
-		}
+![](ch6_MyWorker.png)
 
+* 将来客户端用 getService() 得到的 binder，就指向这个 MyWorker 对象。
+* 代码如下：
 
-* 服务端搞一个 BnWorker 类，从 IWorker 和 BBinder 继承。实现 BBinder 的 onTransact() 函数，从而把客户端发来的命令分发给实际干活的 work() 和 stop() 函数。注意，实际干活的函数并不在 BnWorker 类实现，BnWorker 只负责分发。真正干活的函数会由 BnWorker 的子类 Worker 实现。想同时从 IWorker 和 BBinder 继承，Android 已经给我们提供了模版类：`BnInterface<INTERFACE>`，即我们的 BnWorker 类只需从 `BnInterface<IWorker>` 继承即可。
-
-		:::C++
-		/* IWorker.h */
-		class BnWorker: public BnInterface<IWorker>
-		{
-		public:
-			virtual status_t onTransact(uint32_t code, const Parcel& data, Parcel *reply, uint32_t flags= 0);
-		}
-
-		/* IWorker.cpp */
-		status_t BnWorker::onTransact(uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags)
-		{
-			switch(code)
-			{
-				case WORK:
-					work();
-					break;
-				case STOP:
-					stop();
-					break;
-			}
-		}
-
-* 服务端搞一个 Worker 类，从 BnWorker 继承，实现 work() 和 stop() 函数，真正干活。
-
-		/* IWorker.cpp */
-		class Worker: publilc BnWorker
+		/* IMyWorker.cpp */
+		class MyWorker: publilc IMyWorker, public IBinder
 		{
 			
 		}
 
-		void Worker::work()
+		void MyWorker::do_work()
 		{
 			// do work here ...
 		}	
 
-		void Worker::stop()
+		void MyWorker::stop_work()
 		{
 			// stop work here ...
 		}	
 
-* 为客户端搞一个 BpWorker 类，从 IWorker 和 BpRefBase 继承。实现 work() 和 stop()，实现方式是调用成员变量 mRemote 的 transact() 方法，发送对应命令。其成员 mRemote 来自于类 BpRefBase。想同时从 IWorker 和 BpRefBase 继承，Android 已经给我们提供了模版类：`BpInterface<INTERFACE>`，即我们的 BnWorker 类只需从 `BpInterface<IWorker>` 继承即可。
-* 注意，BpWorker 是提供给客户端用的，但不是客户端负责来写这个类，是服务端的代码来写。BpWorker 对客户端是透明的，客户端只知道自己看到的是 IWorker。客户端不必关心整个 Binder 的运作方式，它只需要从 ServiceManager 查询到 worker 这个 Service（是个 IWorker 实例），然后调用他的功能就可以了。
+#### 3. 实现 static 函数 asInterface()
+* asInterface() 返回的东西需要继承自 IMyWorker，它的业务函数 `do_work()` 和 `stop_work()` 要能给远端 Server 进程里的对象发命令，让它干活。如何实现？？
+* 肯定是利用 IBinder 的某个函数。 asInterface() 的参数是从 ServiceManager 得到的“指向”远端 MyWorker 对象的 IBinder 指针，我们可以利用这个 IBinder 指针实现给远端发命令的功能。
+* 所以现在看起来 asInterface() 返回的东西应该是如下图这个样子的，我们暂且给他起名为 BpMyWorker：
 
-		/* IWorker.cpp */
-		class BpWorker: public BpInterface<IWorker>
+![](ch6_BpMyWorker.png)
+
+* IBinder 有个 transact() 函数，用于发命令。我们利用这个函数来实现 BpMyWorker 的业务函数：
+
+		/* IMyWorker.cpp */
+
+		// 定义 BpMyWorker 类，用于 asInterface() 返回
+		class BpMyWorker: public IMyWorker
 		{
 		public:
-		    BpWorker(const sp<IBinder>& impl)
-		        :BpInterface<IWorker>(impl)
-		    {
-		
+			// 构造函数接收一个 IBindre 指针，把它保存到成员变量 mRemote 里
+			BpMyWorker(sp<IBinder>& binder)
+			:mRemote(binder)
+			{
+				
 			}
-		
-			vitural work()
+
+			// 业务函数仅仅是利用 mRemote 给远端进程发送命令
+			vitural do_work()
 			{
 				Parcel data, reply;
-				remote()->transact(WORK, data, &reply);
+				mRemote->transact(WORK, data, &reply);
 				return;
 			}
-		
-			vitural stop()
+
+			// 业务函数仅仅是利用 mRemote 给远端进程发送命令		
+			vitural stop_work()
 			{
 				Parcel data, reply;
-				remote()->transact(STOP, data, &reply);
+				mRemote->transact(STOP, data, &reply);
 				return;
+			}
+		private:
+			sp<IBinder> mRemote; //用于指向 Server 端的对象
+		}
+
+		// 实现 asInterface()
+		sp<IMyWorker> IMyWorker::asInterface(const sp<IBinder>& binder)
+		{
+			return new BpMyWorker(binder);
+		}
+
+* 现在我们实现了给客户端使用的类，以及其业务函数。客户端的业务函数只负责给服务端发命令，服务端要接收并处理。
+
+
+#### 4. 服务端处理命令
+* 服务端怎么接受该命令？ 同样是用 IBinder，IBinder 还有个方法叫 onTransact()，会收到 transact() 发来的命令。
+* 所以，现在服务端还要多干一件事，处理客户的命令
+
+		:::C++
+		/* IMyWorker.cpp */
+		class MyWorker: publilc IMyWorker, public IBinder
+		{
+			
+		}
+
+		void MyWorker::do_work()
+		{
+			// do work here ...
+		}	
+
+		void MyWorker::stop_work()
+		{
+			// stop work here ...
+		}
+
+		// 实现来自 IBinder 的 onTransact() 函数，处理客户端 transact() 发来的命令
+		status_t MyWorker::onTransact(uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags)
+		{
+			switch(code)
+			{
+				case WORK:
+					do_work();
+					break;
+				case STOP:
+					stop_work();
+					break;
 			}
 		}
 
-* 服务端进程向 ServiceManager 注册 worker 服务
-* 客户端进程向 ServiceManager 查询 worker 服务，拿到服务端进程的 Worker 对象。
+#### 5. 写个主程序，生成进程，注册服务
+* 需要写个主程序，能运行起来，形成进程，该进程向 ServiceManager 注册服务
+
+		int main()
+		{
+		  sp<IServiceManager> sm =defaultServiceManager();
+		  // 注册服务
+		  sm->addService(“my.serv”, new MyWorker());
+		  while(1){}
+		}
+
+#### 6. 写个客户端程序，使用服务
+* 再写个测试程序，试一下使用服务的感觉
+
+		int main()
+		{
+			sp<IServiceManager> sm =defaultServiceManager();
+			// 取得服务
+			sp<IBinder> binder = sm->getService(“my.serv”);
+			// 转为 IMyWorker 指针
+			sp<IMyWorker> wk = IMyWorker::asInterface(binder);
+			// 调用远端对象业务函数
+			wk->do_work();
+			wl->stop_work();
+		}
+		
+## Android 都准备好了
+* 上面的流程里，有很多东西是所有 Service 通用的，所以 Android 为我们准备好了一些好东西。
+* 用上这些东西，我们的代码会简短一些。
+
+### 1. asInterface()，transact() 和 BpXXX
+
+### 2. onTransact() 和 BnXXX
+
+### 3. 用了这些之后
 
 
-### 4. 深入：为什么这样？
-
-#### 4.1 服务端构想
-* Worker 类起码要有两个函数，work()：干活， stop()：停止干活。
-* Worker 类要能被远端 Client 进程“指向”，所以它必须是 IBinder 的子类。
-* Worker 类要能处理远端 Client 进程通过 transact() 发来的指令，即必须有 onTransact() 函数。
-
-#### 4.2 客户端构想
-* 客户端要能通过 ServiceManager 得到指向服务端 Worker 对象的 IBinder 指针:
-
-		sp<IServiceManager>sm = defaultServiceManager();
-		sp<IBinder> binder = sm->getService("my.worker");
-
+---
 ### 5. 更加深入？
 
 
+---
 ## 实例2：基于 Binder 的 IPC —— Java 层：AIDL
