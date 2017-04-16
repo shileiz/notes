@@ -1,47 +1,24 @@
-### 业务层整体逻辑
-* 有 3 个东西： Client、Server、ServiceManager
-* Server 向 ServiceManager 注册 Service，Client 向 ServiceManager 查询 Service，Client 使用 Server 的 Service
-* Server 向 ServiceManager 注册 Service 的过程中，Server 相当于 Client，ServiceManager 相当于 Server
-
-#### Client 和 Server 交互的一般流程
-* Client 先调用 defaultServiceManager() 获取一个 IServiceManager 的指针（实际上是其子类 BpServiceManager 的指针）: `sp<IServiceManager> sm = defaultServiceManager();`
-	* 注：函数 defaultServiceManager() 是 Android binder 组件的一部分，在 IServiceManager.cpp 中实现的。
-* 然后 Client 利用这个指针，向 ServiceManager 查询 Service，得到这个 Service 的 IXXXService 指针。查询 Service 分为两小步，以查询 MediaPlayerService 为例：
-	1. `sp<IBinder> binder = sm->getService(String16("media.player");`： 得到 binder
-	2. `sp<IMediaPlayerService> service = interface_cast<IMediaPlayerService>(binder);` ： 把 binder cast 成 IMediaPlayerService（实际上是其子类 BpMediaPlayerService）。 
-* 最后 Client 用得到的 IMediaPlayerService 指针，调用该 Service 提供的业务函数。 `service->create(this, mAudioSessionId);`
-
-#### 再捋一次
-* 一个 Service，要提供一个接口类来供 Client 调用其业务函数，一般这个接口类叫做 IXXXService。
-* 比如上面的 IMediaPlayerService 就是 MediaPlayerService 的接口类，它的 create() 函数就是提供给 Client 的业务函数之一。
-* ServiceManager 本身也是一个 Service，它提供给 Client 的业务函数就是 getService()，addService() 等等
-* 所以 ServiceManager 也有一个接口类，IServiceManager，上面的过程中 Client 就调用了这个接口里的 getService() 函数来查询 Service。
-* 得到普通 Server 的接口类的指针，需要向 ServiceManager 查询，方法是调用 IServiceManager 的 getService();
-* 得到 ServiceManager 的接口类指针，binder 系统为我们提供了方便函数： defaultServiceManager()
-
-#### Server 向 ServiceManager 注册 Service
-* 上面说过，Server 向 ServiceManager 注册 Service 的过程中，Server 相当于 Client，ServiceManager 相当于 Server
-* 此时的流程跟 Client 使用 Service 是一个道理
-* Server 先调用 defaultServiceManager() 获取一个 IServiceManager 的指针（实际上是其子类 BpServiceManager 的指针）:`sp<IServiceManager> sm = defaultServiceManager();`
-* Server 得到这个指针时候，调用 ServiceManager 的业务函数 addService() 来注册自己的 Service：`sm->addService(String16("media.player"), new MediaPlayerService());`
-
-#### 业务层小结
-* 其实抛开底层 binder 具体是怎么实现的，业务层已经很简单清晰了
-* 业务层使用起来流程也相对固定，没什么难理解的
-* 接下来我们稍微深入一点（但还没深到binder那么深），看看作为一个 Service，是怎么提供服务的，Client 是怎么使用这个服务的。
-
----
-
 ## 理论基础
 
 ### 1. 服务是什么？
-* 可以简单的把服务理解为一个进程里的对象，它能干活，而且能被别的进程“引用”。
+* 可以简单的把服务理解为一个进程里的一个对象，它能干活，而且能被别的进程“引用”。
 * 比如你搞了个进程，里面 new 了一个 MyWorker 对象，该对象可以被其他进程“引用”，并调用它的 `do_work()` 函数来干活。那么这个对象就是一个服务。
-* 一个对象想成为“服务”的必要条件是能被其他进程引用，在 Binder 系统里，代表着它必须是个 IBinder 类型的对象。
+* 一个对象想成为“服务”的必要条件是：
+	* 1. 能被其他进程引用，在 Binder 系统里，代表着它必须继承自 IBinder 类。
+	* 2. 能提供业务能力，即能干活，这说明它必须同时继承自某个业务类。
+
+![](ch6_Server1.png)
+
+* 如上图所示，一个 MyWorker 对象可以成为一个服务。
 
 ### 2. Binder 是什么？
 * 把 Binder 理解为一个管道，它能连通两个进程，一个进程是 Server 端，另一个是客户端。
-* 甚至在设计服务和使用服务的程序员看来，Binder 就是硬件。
+* Server 端里有一个 IBinder 类型的对象，客户端可以拿到一个“指向它的指针”。当然不是真的指向，而是逻辑上的。因为只有在同一个进程里，才能用一个指针指向一个对象。
+
+![](ch6_Binder1.png)
+
+* 图中的虚线表示这是逻辑上的指向。实线表示实际数据流是通过 Binder 传送的。
+* 当 Client 端调用了 b 的 transact() 函数时，Server 端的 onTransact() 函数会被调用，并把 Client 端的参数传进来。
 
 ### 3. ServiceManager 是什么？
 * Android 提供了一个 ServiceManager，服务端向它注册服务，客户端从他得到服务。
@@ -49,18 +26,16 @@
 
 ![](ch6_Binder_ServiceManager.png)
 
-* ServiceManager、Binder、服务、客户端进程、服务端进程的关系如上图所示。
+* ServiceManager、Binder、服务、客户端进程、服务端进程的关系如上图所示。图中的虚线表示这是逻辑上的指针，实际通信是由底层的 Binder 提供的。
 
-#### 3.1 注册服务
+### 4. 注册服务
 * 注册服务使用 ServiceManager 的 addService() 函数，原型如下
 
 		status_t addService(const String16& name, const sp<IBinder>& service)
 
 * 注册服务需要提供2个东西：
 	* 服务名称，是个字符串。
-	* 指向务本身的指针，是个 IBinder 类型的指针。
-* 其实服务本身肯定不只是 IBinder 类型的，服务是要提供业务能力的，所以肯定也是 MyWorker 类型的。只不过，在 ServiceManager 看来，所有服务都是 IBinder。ServiceManager 只看到管道，只负责链接，不关心业务。
-* 真实注册服务的时候，第二个参数都是一个既继承自 IBinder 又继承自业务类（比如叫 IMyWorker）的对象。
+	* 指向务本身的指针。
 * IBinder 确保可以跨进程通信，即确保可以被 addService() 接收。IMyWorker 确保提供业务函数，比如 `do_work()`。
 * 比如我们注册一个自己的服务：
 
@@ -73,7 +48,7 @@
 		sp<IServiceManager>sm = defaultServiceManager();
 		sm->addService("my.serv", new MyWorker());
 
-#### 3.2 得到服务
+### 5. 得到服务
 * 得到服务使用 ServiceManager 的 getService() 函数，原型如下
 
 		sp<IBinder> getService(constString16& name)
@@ -104,7 +79,7 @@
 		wk->do_work();
 
 
-### 4. 理论基础回顾：客户端视角
+### 6. 理论基础回顾：客户端视角
 * 客户端进程通过 ServiceManager 和 IMyWorker 类的 asInterface() 函数，能“看到”服务进程里的 IMyWorker 对象。
 * 客户端感觉不到自己是在跨进程，在客户端进程看来，就像是自己 new 出来一个 IMyWorker 对象一样。只不过不是 new 出来，而是从 ServiceManager 那 get 一个。
 * 客户端看到的 IWorker 类是这样：
@@ -276,8 +251,49 @@
 
 
 ---
-### 5. 更加深入？
+## 跟 ServiceManager 的交互，也是一次基于 Binder 的 IPC
+
+### ServiceManager 是一个远端进程
+
+### ServiceManager 的业务函数：addService(), getService()
+
+
 
 
 ---
 ## 实例2：基于 Binder 的 IPC —— Java 层：AIDL
+
+---
+### 业务层整体逻辑
+* 有 3 个东西： Client、Server、ServiceManager
+* Server 向 ServiceManager 注册 Service，Client 向 ServiceManager 查询 Service，Client 使用 Server 的 Service
+* Server 向 ServiceManager 注册 Service 的过程中，Server 相当于 Client，ServiceManager 相当于 Server
+
+#### Client 和 Server 交互的一般流程
+* Client 先调用 defaultServiceManager() 获取一个 IServiceManager 的指针（实际上是其子类 BpServiceManager 的指针）: `sp<IServiceManager> sm = defaultServiceManager();`
+	* 注：函数 defaultServiceManager() 是 Android binder 组件的一部分，在 IServiceManager.cpp 中实现的。
+* 然后 Client 利用这个指针，向 ServiceManager 查询 Service，得到这个 Service 的 IXXXService 指针。查询 Service 分为两小步，以查询 MediaPlayerService 为例：
+	1. `sp<IBinder> binder = sm->getService(String16("media.player");`： 得到 binder
+	2. `sp<IMediaPlayerService> service = interface_cast<IMediaPlayerService>(binder);` ： 把 binder cast 成 IMediaPlayerService（实际上是其子类 BpMediaPlayerService）。 
+* 最后 Client 用得到的 IMediaPlayerService 指针，调用该 Service 提供的业务函数。 `service->create(this, mAudioSessionId);`
+
+#### 再捋一次
+* 一个 Service，要提供一个接口类来供 Client 调用其业务函数，一般这个接口类叫做 IXXXService。
+* 比如上面的 IMediaPlayerService 就是 MediaPlayerService 的接口类，它的 create() 函数就是提供给 Client 的业务函数之一。
+* ServiceManager 本身也是一个 Service，它提供给 Client 的业务函数就是 getService()，addService() 等等
+* 所以 ServiceManager 也有一个接口类，IServiceManager，上面的过程中 Client 就调用了这个接口里的 getService() 函数来查询 Service。
+* 得到普通 Server 的接口类的指针，需要向 ServiceManager 查询，方法是调用 IServiceManager 的 getService();
+* 得到 ServiceManager 的接口类指针，binder 系统为我们提供了方便函数： defaultServiceManager()
+
+#### Server 向 ServiceManager 注册 Service
+* 上面说过，Server 向 ServiceManager 注册 Service 的过程中，Server 相当于 Client，ServiceManager 相当于 Server
+* 此时的流程跟 Client 使用 Service 是一个道理
+* Server 先调用 defaultServiceManager() 获取一个 IServiceManager 的指针（实际上是其子类 BpServiceManager 的指针）:`sp<IServiceManager> sm = defaultServiceManager();`
+* Server 得到这个指针时候，调用 ServiceManager 的业务函数 addService() 来注册自己的 Service：`sm->addService(String16("media.player"), new MediaPlayerService());`
+
+#### 业务层小结
+* 其实抛开底层 binder 具体是怎么实现的，业务层已经很简单清晰了
+* 业务层使用起来流程也相对固定，没什么难理解的
+* 接下来我们稍微深入一点（但还没深到binder那么深），看看作为一个 Service，是怎么提供服务的，Client 是怎么使用这个服务的。
+
+---
