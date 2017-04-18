@@ -19,6 +19,8 @@
 
 * 图中的虚线表示这是逻辑上的指向。实线表示实际数据流是通过 Binder 传送的。
 * 当 Client 端调用了 b 的 transact() 函数时，Server 端的 onTransact() 函数会被调用，并把 Client 端的参数传进来。
+* 比如，Client 可以在 transact() 的参数里写上“DOWORK”，Server 端在 onTransact() 里看到参数“DOWORK”，则去调用自己的  `do_work()` 函数干活。
+* 那么现在的问题是，如何在一个 Client 进程里，弄一个指针 b，指向另一个进程（Server）的对象呢？答案就是：ServiceManager。
 
 ### 3. ServiceManager 是什么？
 * Android 提供了一个 ServiceManager，服务端向它注册服务，客户端从他得到服务。
@@ -26,7 +28,7 @@
 
 ![](ch6_Binder_ServiceManager.png)
 
-* ServiceManager、Binder、服务、客户端进程、服务端进程的关系如上图所示。图中的虚线表示这是逻辑上的指针，实际通信是由底层的 Binder 提供的。
+* 上图说明了 Client 进程指向 Server 进程里的对象这条虚线“指针”，是通过 ServiceManager 建立的。
 
 ### 4. 注册服务
 * 注册服务使用 ServiceManager 的 addService() 函数，原型如下
@@ -35,14 +37,13 @@
 
 * 注册服务需要提供2个东西：
 	* 服务名称，是个字符串。
-	* 指向务本身的指针。
-* IBinder 确保可以跨进程通信，即确保可以被 addService() 接收。IMyWorker 确保提供业务函数，比如 `do_work()`。
+	* 指向务的指针，是 `sp<IBinder>` 类型
 * 比如我们注册一个自己的服务：
 
 		ServiceManager::addService("my.serv", new MyWorker()); 
 		// MyWorker 同时继承自 IBinder 和 IMyWorker
 
-* 以上语句在 ServiceManager 里注册了一个名为 "my.serv" 的服务，该服务的提供者就是一个 MyWorker 对象。以后客户端拿到该服务，就能使用 MyWorker 对象的业务函数了，比如 `do_work()` 之类的。
+* 以上语句在 ServiceManager 里注册了一个名为 "my.serv" 的服务，该服务的提供者就是一个 MyWorker 对象。以后客户端拿到该服务，就能使用 MyWorker 对象的业务函数 `do_work()` 了。
 * 另外注意，addService() 并不是静态函数，不能直接 `ServiceManager::` 调用，上面的代码只是示意。实际使用时，我们使用 Android 提供的 defaultServiceManager() 函数来得到一个 ServiceManager 的实例，然后通过实例调用：
 
 		sp<IServiceManager>sm = defaultServiceManager();
@@ -59,12 +60,14 @@
 		sp<IServiceManager>sm = defaultServiceManager();
 		sp<IBinder> binder = sm->getService("my.serv");
 
-* 以上语句从 ServiceManager 处得到了刚才注册的 my.serv 这个服务，在客户端看来，它就像是一个 MyWorker 对象的指针，我们可以直接调用它的业务函数，比如：
+* 以上语句从 ServiceManager 处得到了刚才注册的 my.serv 这个服务。它是一个 IBinder 类型的指针。
+* 我们可以调用 IBinder 的 transact() 函数，向远端对象发命令：
 
-		binder->do_work();
+		binder->transact("DOWORK");
 
-* 但这样做似乎不妥，因为 binder 是 IBinder 类型指针，没有 `do_work()` 这个业务函数。那么怎么办呢？ 
-* `do_work()` 是 IMyWorker 类的业务函数，IMyWorker 类有义务提供一个函数，让客户端能把连接到自己的 IBinder 指针转换成 IMyWorker 指针。这个函数一般叫做 asInterface()，原型如下：
+* 以上语句把"DOWORK" 发送给 Server 进程的 onTransact() 函数。"DOWORK"可以是我们自己定义的枚举类型，让 Server 端根据它选择干什么。
+* 现实中更加稳妥的做法不是让用户直接调用 transact() 函数，而是服务端把这一切封装好，让客户端产生一种幻觉，感觉自己真的再使用 MyWorker 对象的指针，而忘记这是在跨进程。
+* 其做法就是让接口类 IMyWorker 提供一个静态函数，该函数让客户端能把“指向”服务端的 IBinder 指针转换成 IMyWorker 指针。这个函数一般叫做 asInterface()，原型如下：
 
 		sp<IMyWorker> IMyWorker::asInterface(sp<IBinder>& binder)
 
@@ -72,9 +75,10 @@
 
 ![](ch6_client.png)
 
-* 这样，客户端就可以调用服务端的业务函数了：
+* 这样，客户端就可以像调用本地对象的业务函数一样，调用服务端对象的业务函数了：
 
-		sp<IBinder> binder = ServiceManager::getService("my.serv");
+		sp<IServiceManager>sm = defaultServiceManager();
+		sp<IBinder> binder = sm->getService("my.serv");
 		sp<IMyWorker> wk = IMyWorker::asInterface(binder)；
 		wk->do_work();
 
