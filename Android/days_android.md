@@ -153,6 +153,24 @@
 * addContentView(View view, LayoutParams params) 也是把 view 添加给这个 frameLayout 的
 
 
+### 用 ant 构建 Android 工程
+
+#### 1. 生成 build.xml
+* 首先要用 `android update project -p .` 来生成 build.xml， ant 需要这个 xml
+* 其中 android 命令是 SDK 的一部分，需要把 SDK 的 tools 加入 PATH 才能使用
+* -p 参数指定 project，可以先 cd 到工程目录，即 AndroidManifest.xml 所在目录，再以 . 为 -p 参数的值。
+
+#### 2. 安装 ant
+* 绿色安装，下载加入 path 即可
+* 下载地址：[http://ant.apache.org/bindownload.cgi](http://ant.apache.org/bindownload.cgi)
+
+#### 3. 运行 ant 进行 build
+* 用 ant 编译一个 debug 版的 apk：`ant debug`
+* 成功后会在 bin 目录下生成 XXX-debug.apk 和 XXX-debug-unaligned.apk 两个 apk，安装 debug 那个即可。
+
+#### 4. 出现 invalid resource directory name: xxxx\xxx\res crunch 错误
+* 删除 bin\res\crunch 目录，重新 `ant debug` 即可
+
 ##Player开发相关
 
 ###关于Player开发中各种互相阻塞的问题
