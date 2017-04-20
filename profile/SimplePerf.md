@@ -1,4 +1,4 @@
-## 步骤
+## HelloWorld 步骤
 * 把 simpleperf 可执行程序 push 到手机上。 simpleperf 在 NDK-r13b 的 `simpleperf/android/` 里。根据被测程序和手机的CPU选择对应版本：
 
 		adb push simpleperf /data/local/tmp/
@@ -45,10 +45,16 @@
 		8.05%     10560   /system/lib/libc.so
 		3.01%     8437    [kernel.kallsyms]
 
+* 其中的 --sort 参数是用来指定结果显示哪些列，我们这里只写了一个 dso（即 dynamic shared object），所以结果只显示一列 “Shared Object”，而且按 dso 分类，结果也只有三行而已。
+* 如果不加 --sort 参数，默认显示这几列：Command，Pid，Tid，Shared Object，Symbol，相当于：
+
+		--sort comm,pid,tid,dso,symbol
+
+* -n 参数用来显示 Sample 那列，表示该行共命中了多少个 Sample，加不加随意。
 * 可以看到，百分之 88.93 的时间都耗费在了我们的被测程序上，这是预期中的。
 * 看一下我们 app 内部，那些函数占的比重最大：
 
-		adb shell /data/local/tmp/simpleperf report -i /sdcard/perf.data -n --dsos /data/local/rvdecApp --sort symbol
+		adb shell /data/local/tmp/simpleperf report -i /sdcard/perf.data --dsos /data/local/rvdecApp --sort symbol
 
 * 结果如下：
 
@@ -68,6 +74,12 @@
 		0.94%     999     rvdecApp[+20188] 
 		...
 
+* 其中的  --dsos 参数是 simpleperf 的 5 个 filter 之一，意思是按照指定的 dynamic shared objects 进行过滤，只显示参数指定的 dso 里面的结果。全部 5 个 filter 是：
+	* --comms： 按 command 过滤，比如：`--comm rvdecApp`
+	* --pids: 按 pid 过来
+	* --tids: 按 tid（线程id）过滤
+	* --dsos： 按库文件/可执行文件名过滤
+	* --symbols： 按函数名过滤，比如： `--symbols "RVComFunc::getPUMVPredictor(RefBlockInfo*, unsigned int, int, int, unsigned int)"`，注意函数里有空格的，需要用双引号引起来。
 * 可以看到，结果里没有函数名字。那是因为我们的 rvdecApp 是没有符号表的版本。我们用带符号表的 app 进行分析即可。
 * 带符号表的 app 可执行文件可以在 obj 目录下找到。把它 push 到手机上，覆盖原来的可执行文件。
 * 注意，不用重新执行 rvdecApp 并重新采集 perf.data, 只需要在分析时使用带有符号表的 rvdecApp 即可。
@@ -89,6 +101,29 @@
 		2.52%     2651    RVComFunc::DBFShiftedProcessFu(unsigned char**, int*, unsigned char*, int, unsigned char*, int, int, bool, bool, bool, bool, unsigned char)
 		2.36%     2553    (anonymous namespace)::decode_gen_vlc(unsigned long const*, int, (anonymous namespace)::VLC*, int, int)
 		...
+
+* 不覆盖被测程序也可，但是要明确告诉 simpleperf 去哪个可执行里读取符号表和debug信息，不然 simpleperf 默认是去 record 时的那个可执行文件里读的。这个参数是： `--symfs`，它后面跟一个目录。
+* 比如我们刚才的被测程序是  `/data/local/rvdecApp`，我们把带有符号表的 rvdecApp 放到 /sdcard/data/local/rvdecApp，然后用 `--symfs /sdcard` 即可。 注意，必须把 rvdecApp 放到一个含有 `/data/local/` 的目录里，因为执行的时候是全路径，simpleperf 认为 `/data/local/rvdecApp` 整个是可执行文件。
+
+
+## 实际使用
+
+### 1. 用 simpleperf 启动被测进程
+* 可以用 simpleperf 启动被测进程。而不必先把被测进程启动，然后 ps 出进程号再采集。其命令行格式如下：
+
+		adb shell /data/local/tmp/simpleperf record -o /sdcard/a.log /data/local/rvdecApp /data/local/CampfireParty_2496x1404_30_300_5000_rmhd_slow2pass.rv -i w=2496,h=1404
+
+* 其中 `/data/local/rvdecApp` 是被测 app 的可执行文件，后面跟的都是该 app 的启动参数
+* 如此启动的 simpleperf，将在被测进程运行结束后停止采集并退出。
+
+### 2. cache-miss
+* 默认采集的是 event 是  cpu-cycles，所以我们默认得到的结果都是“CPU使用率”
+
+		As the perf event is cpu-cycles, the overhead can be seen as the percentage of cpu time used in each function.
+
+* 用 -e 参数可以指定要采集哪些 event，我们用 -e cache-misses 即可以采集 cache-miss
+
+		adb shell /data/local/tmp/simpleperf record -o /sdcard/a.log -e cache-misses /data/local/rvdecApp /data/local/CampfireParty_2496x1404_30_300_5000_rmhd_slow2pass.rv -i w=2496,h=1404
 
 ## 其他
 * 不使用 --duration 参数指定采集时间，当被采集进程退出时，simpleperf 不会自动停止采集，而是会报告如下的log：
