@@ -66,12 +66,14 @@
 		binder->transact("DOWORK");
 
 * 以上语句把"DOWORK" 发送给 Server 进程的 onTransact() 函数。"DOWORK"可以是我们自己定义的枚举类型，让 Server 端根据它选择干什么。
-* 现实中更加稳妥的做法不是让用户直接调用 transact() 函数，而是服务端把这一切封装好，让客户端产生一种幻觉，感觉自己真的再使用 MyWorker 对象的指针，而忘记这是在跨进程。
-* 其做法就是让接口类 IMyWorker 提供一个静态函数，该函数让客户端能把“指向”服务端的 IBinder 指针转换成 IMyWorker 指针。这个函数一般叫做 asInterface()，原型如下：
+* 现实中更加稳妥的做法不是让用户直接调用 transact() 函数，而是服务端把这一切封装好，让客户端产生一种幻觉，感觉自己真的在使用 MyWorker 对象的指针，而忘记这是在跨进程。
+* 做法是：服务端实现一个 IMyWorker 的子类， 该子类的 `do_work()` 函数就是调用 `this->binder->transact("DOWORK");`。对，该子类里需要有一个 binder 来指向服务端，该子类的构造函数需要一个 binder。然后服务端暴露给客户端的接口是一个静态函数，该函数让客户端把“指向”服务端的 binder 换成该子类的指针。这样，在客户端看来，只要以 binder 为参数调用该函数，就能返回一个 IMyWorker 类型的指针了。
+* 这个函数一般叫做 asInterface()，原型如下：
 
 		sp<IMyWorker> IMyWorker::asInterface(sp<IBinder>& binder)
 
-* 该函数以 binder 为参数，返回一个 IMyWorker 对象。IMyWorker 对象虽有业务函数，但也并非真的干活，它只是指挥远端进程的 MyWorker 干活。
+* 该函数以 binder 为参数，返回一个 IMyWorker 对象。IMyWorker 对象虽有业务函数，但也并非真的干活，它只是通过 transact() 发送指令，指挥远端进程的 MyWorker 干活。
+* 再次提醒，虽然以上所说的子类是给客户端使用的，但也要有服务端的编写者来编写。客户端只负责用。
 
 ![](ch6_client.png)
 
