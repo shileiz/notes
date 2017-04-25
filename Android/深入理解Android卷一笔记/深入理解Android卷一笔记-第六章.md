@@ -267,7 +267,7 @@
 
 
 ---
-## 实例2：基于 Binder 的 IPC —— Java 层：AIDL
+## 实例2：基于 Binder 的 IPC —— Java 层：AIDL、Messenger or Binder？
 
 ---
 ### 业务层整体逻辑
