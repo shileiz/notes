@@ -1,4 +1,4 @@
-##使用Service: 同进程（一）
+##同进程使用Service（一）： IBinder
 * 比如，你做了一个音乐播放 app，里面有一个 MusicService 负责后台播放音乐，对外提供 play()，pause() 的接口
 * 你在一个 Activity 里想调用这个 Service 的 play()，怎么搞？
 * 必须在这个 Activity 里拿到刚才启动的 MusicService 的实例，但这是不可能的。Service 实例是由安卓OS维护的，你拿不到。（启动 Service 可不是 new MusicService() new 出来的，而是调用安卓系统的 startService()/bindService()，这些函数不给你返回被启动的Service实例）
@@ -7,7 +7,7 @@
 ###Service机制
 * 服务端都继承自 Service 类，Service 类有个 onBind() 方法。当有客户端来使用 Service 的时候，安卓OS会调用该 Service 的 onBinde()。因为 onBind() 的返回类型并不是 Service，所以我们不能直接把 Service 的实例返回去。
 * 并且，就算你返回去了也没用，因为客户端不是 onBind() 的调用者，安卓OS才是。客户端调的是 bindService()。
-* 客户端调用 `bindService(Intent intent, ServiceConnection conn, int flags)`，去绑定 Service，以便能够使用 Service 的功能。
+* 客户端调用 bindService() 去绑定 Service，以便能够使用 Service 的功能。函数原型是：`boolean bindService(Intent intent, ServiceConnection conn, int flags)`，
 * 安卓OS是这么玩的： 
 	* 客户端调用 `bindService(intent, conn, BIND_AUTO_CREATE)` 的时候，传入的 conn 对象是用于回调的；
 	* 此时安卓OS调用 Service 的 `onBind(intent)`；
@@ -18,7 +18,7 @@
 * 第一个参数 intent 指定要绑定的是哪个 Service，我们这里就是: `new Intent(this, MusicService.class);`
 * 第三个参数 flags 一般用 `BIND_AUTO_CREATE` 即可。表示如果被绑定的Service还没启动，则安卓OS会自动启动它。
 * 重点是第二个参数。 
-	* 它是 ServiceConnection 类型的，ServiceConnection 是个接口
+	* 它是 ServiceConnection 类型的
 	* 当 Service 绑定好了之后（Service 的 onBind() 返回了），安卓OS会回调 `conn.onServiceConnected(ComponentName name, IBinder service)`
 	* 安卓OS会在这个回调里，传来一个 IBinder 类型的对象（第二个参数）：service。
 	* 这个 service 是 Service 端的 onBind() 方法 return 的东西。
@@ -32,7 +32,7 @@
 		    // 用于让 onBind() 返回的类，它从 Binder 继承，即实现了 IBinder 接口
 			// 我们给它加了一个方法，getService()，用于返回 MusicService 的实例
 			public class MyBinder extends Binder {
-		        LocalService getService() {
+		        MusicService getService() {
 		            return MusicService.this;
 		        }
 		    }
@@ -57,7 +57,6 @@
 
 			// 准备一个 ServiceConnection，用来绑定 Service 并接收 Service onBind() 返回的那个 IBinder。
 		    private ServiceConnection mConnection = new ServiceConnection() {
-		
 		        @Override
 		        public void onServiceConnected(ComponentName className,IBinder service) {
 		            // 注意 ！！！！ 这里要进行强转，才能使用 getService() 方法 ！！！！
@@ -88,7 +87,7 @@
 * 这样，客户端和 Service 的联系就建立起来了。
 
 
-##使用Service: 同进程（二）
+##同进程使用Service（二）：还是 IBinder
 * 这一节跟上一节没有本质区别，只是在上节基础上做了一点包装。
 * 让 Service 的 onBind() 函数返回的不光是一个 IBinder，还是一个 MusicInterface。
 * MusicInterface 是个接口，统一封装了 MusicService 的业务函数。客户端和服务端都通过该接口使用业务函数。
@@ -242,7 +241,122 @@
 * 最后，你会遇到不让强转的问题
 
 
-##使用Service: 跨进程
+##跨进程使用Service（一）：Message
+
+### 1. 回忆一下 Handler 和 Message
+* 在UI编程时，我们经常用 Handler 和 Message 处理高耗时任务。
+* 具体方法：
+	* Activity 里弄个 Handler 类型的成员 mHandler。 
+	* mHandler 的 handleMessage() 负责处理 Message
+	* 在 Activity 里起一个线程去做高耗时任务，该线程通过 mHandler.sendMessage() 给 mHander 发送 Message。
+* 要点： Activity 里的工作线程能拿到 mHander。这很容易，内部类可以通过类名访问外部类。
+
+
+### 2. Messager
+* UI 里只使用了两个类： Handler、Message。 UI 里都是调用 Handler 的 sendMessage(Message msg) 方法，发送一个 Message。然后 Handler 的 handleMessage() 会收到这个 Message 参数。
+* 说白了，这种传递 Message 的方式，是用同一个对象（mHandler）的两个方法（sedMessage(),handleMessage()）在传递 Message。
+* 而同一个对象不可能横跨两个进程，所以我们需要一个新类：Messager。
+* Messager 是基于 Binder 构建的，所以可以跨进程。 Messager 的构造函数需要一个 IBinder 参数：
+
+		Messenger(IBinder target)
+		// Create a Messenger from a raw IBinder, which had previously been retrieved with getBinder(). 
+
+* 以上是 API 文档里对该构造函数的描述，他说那个 IBinder 参数必须是之前用 getBinder() 拿到的。这是啥意思？
+* Messager 类有个 getBinder() 方法，能返回这个 Messager 与对应的 Handler 通信用的 IBinder。 
+* 对应的 Handler 在哪里？ Messager 还有一个构造函数，以 Handler 为参数。
+
+	 	Messenger(Handler target)
+		//Create a new Messenger pointing to the given Handler. 
+
+* 用 Messager 发送 Message 的时候，直接发给该 Handler。
+* 要点：
+	1. Messager 有两个构造函数，一个以 Handler 为参数，一个以 IBinder 为参数。
+	2. Messager 有个 getBinder() 方法，能返回与它对应的 Handler 通信用的 IBinder。
+* 这样就可在服务端弄一个 Handler，用来处理客户端发的 Message。然后基于它构建一个 Messager，用其 getBinder() 方法得到 Messager 与 Handler 通信的 IBinder。
+* 然后服务端的 onBind() 返回这个 IBinder。
+* 客户端得到这个 IBinder 后，再基于它构建一个自己的 Messager，这个 Messager 发的消息，就会被服务端收到了。
+* 注意： 服务端和客户端各有自己的 Messager 对象，而不是同一个对象。服务端的 Messager 是基于 Handler 构建，客户端的是基于 IBinder 构建。
+
+### 3. 利用 Messager 跨进程使用 Service
+
+#### 3.1服务端
+* 服务端代码如下：
+
+		public class MusicServer extends Service {
+		
+		    static final int MSG_PLAY = 1;
+		
+		    class ServiceHandler extends Handler  {
+		        @Override
+		        public void handleMessage(Message msg) {
+		            switch (msg.what) {
+		                case MSG_PLAY:
+		                	MusicServer.this.play();
+		                    break;
+		                default:
+		                    super.handleMessage(msg);
+		            }
+		        }
+		    }
+		
+		    final Messenger mMessenger = new Messenger(new ServiceHandler());
+		
+		    @Override
+		    public IBinder onBind(Intent intent) {
+		        //返回给客户端一个 IBinder 实例,客户端基于它构建自己的 Messager，然后发消息过来
+		        return mMessenger.getBinder();
+		    }
+		    
+		    public void play(){
+		    	Log.d("Messager Test", "Playing");
+		    }
+		}
+
+#### 3.2 客户端
+* 客户端代码如下：
+
+		public class MainActivity extends Activity {
+			
+		    static final int MSG_PLAY = 1;
+		
+		    Messenger mService = null;
+		
+		    private ServiceConnection mConnection = new ServiceConnection() {
+		        public void onServiceConnected(ComponentName className, IBinder service) {
+		            //接收onBind()传回来的IBinder，并用它构造Messenger
+		            mService = new Messenger(service);
+		        }
+		
+				@Override
+				public void onServiceDisconnected(ComponentName name) {
+				}
+		
+		    };
+		
+		    public void play() {
+		        Message msg = Message.obtain(null, MSG_PLAY, 0, 0);
+		        try {
+		            mService.send(msg);
+		        } catch (RemoteException e) {
+		            e.printStackTrace();
+		        }
+		    }
+		    
+			@Override
+			protected void onCreate(Bundle savedInstanceState) {
+				super.onCreate(savedInstanceState);
+				setContentView(R.layout.activity_main);
+				Intent intent = new Intent();
+				intent.setClassName("com.zsl.musicserver1", "com.zsl.musicserver1.MusicServer");
+				bindService(intent, mConnection, BIND_AUTO_CREATE);
+			}
+			
+		    public void btn_play_clicked(View v){
+		        play();
+		    }
+		}
+
+##跨进程使用Service（二）：AIDL
 
 
 ##使用代码注册广播接收者
