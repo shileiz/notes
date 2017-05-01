@@ -1,0 +1,27 @@
+用 Visual Studio 生成 dll 实现 JNI 的 helloworld()
+
+0、使用的是 VS2010，其他版本应该大同小异
+
+1、新建项目时，要选择DLL项目而不是控制台应用程序项目。对VS2010来说，具体就是：选“Win32项目”，而不是“Win32控制台应用程序”。Win32项目点确定 --> 下一步可以选DLL。
+
+2、把 jin.h 和 jni_md.h 让项目能引用到。要么就去 jdk 的 include 下把他俩复制到你项目里，要么就在项目上右键-->属性，C/C++--->常规--->附加包含目录，填写 <your_jdk_path>/include 和 <your_jdk_path>/include/win32
+
+3、VS默认生成的都是cpp文件，按c++编译。这样编译出来的DLL不能直接被java使用。有两种解决方法：
+
+要么所有源文件后缀名改成.c，重新生成项目。要么在头文件里加上如下内容（就是从javah生成的那个头文件里复制出来的）：
+
+ 
+
+#ifdef __cplusplus 
+extern "C" {
+#endif
+JNIEXPORT void JNICALL 
+Java_HelloWorld_displayHelloWorld  (JNIEnv *, jobject);
+#ifdef 
+__cplusplus 
+}
+#endif
+
+ 
+
+4、也就是说，如果你include了javah生成的那个头文件，就不用去解决cpp不兼容的问题了。

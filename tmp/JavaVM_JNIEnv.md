@@ -27,7 +27,7 @@
 * 参考官方文档第5章：
 
 
->http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/invocation.html
+>[http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/invocation.html](http://docs.oracle.com/javase/7/docs/technotes/guides/jni/spec/invocation.html)
 
 * 官方文档里上来就是一个例子，看了这个例子，基本就明白怎么从下往上调了。
 * 下面介绍具体怎么把这个例子运行起来。

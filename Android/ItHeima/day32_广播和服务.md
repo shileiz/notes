@@ -1,10 +1,10 @@
-##同进程使用Service（一）： IBinder
+##同进程使用Service（一）
 * 比如，你做了一个音乐播放 app，里面有一个 MusicService 负责后台播放音乐，对外提供 play()，pause() 的接口
 * 你在一个 Activity 里想调用这个 Service 的 play()，怎么搞？
 * 必须在这个 Activity 里拿到刚才启动的 MusicService 的实例，但这是不可能的。Service 实例是由安卓OS维护的，你拿不到。（启动 Service 可不是 new MusicService() new 出来的，而是调用安卓系统的 startService()/bindService()，这些函数不给你返回被启动的Service实例）
 * 我们可以想个办法把 Service 的实例返回去：首先要了解 Service 和客户端的回调机制，这里涉及一个重要的接口类：IBinder。
 
-###Service机制
+###一、Service机制
 * 服务端都继承自 Service 类，Service 类有个 onBind() 方法。当有客户端来使用 Service 的时候，安卓OS会调用该 Service 的 onBinde()。不过因为 onBind() 的返回类型并不是 Service，所以我们不能直接把 Service 的实例返回去。
 * 并且，就算你返回去了也没用，因为客户端不是 onBind() 的调用者，安卓OS才是。客户端调的是 bindService()。
 * 客户端调用 bindService() 去绑定 Service，以便能够使用 Service 的功能。函数原型是：`boolean bindService(Intent intent, ServiceConnection conn, int flags)`，
@@ -14,10 +14,10 @@
 	* 它是 ServiceConnection 类型的
 	* 当 Service 绑定好了之后（Service 的 onBind() 返回了），安卓OS会回调 `conn.onServiceConnected(ComponentName name, IBinder service)`
 	* 安卓OS会在这个回调里，传来一个 IBinder 类型的对象（第二个参数），它就是 Service 端的 onBind() 方法 return 的东西。
-* 但这里还是没有拿到 Service 的实例，因为 onBind() 返回的并不是 Service 实例。
+* 但这里还是没有拿到 Service 的实例，因为 onBind() 返回的并不是 Service 实例，而是一个 IBinder。
 * 不过既然知道了服务端和客户端之间交互的流程，就可以想办法让客户端拿到 Service 实例了。
 
-###让客户端拿到Service的实例
+###二、让客户端拿到Service的实例
 * Service 端通过重写 onBind() 方法，让它返回一个可以拿到 Service 实例的 IBinder。比如给这个 IBinder 添加一个方法，getService().
 
 		public class MusicService extends Service {
@@ -82,12 +82,12 @@
 
 * 以上程序写在同一个工程里可以正确运行，点击 play 按钮后 logcat 输出 playing。
 
-###小结
+###三、小结
 * Service 重写 onBind() 方法，返回一个 IBinder 的子类。
 * 客户端用 conn 的 onServiceConnected() 方法接收到这个返回的对象。
 * 这样，客户端和 Service 的联系就建立起来了。
 
-###问题
+###四、问题
 * 首先，上面这种做法很难做到跨进程，先不说原理，就从代码层面看也不行
 * 上例中客户端需要拿到Service的实例，这就要求客户端和服务端必须在一个工程里，如果是两个 app 根本没法搞：
 
@@ -96,10 +96,11 @@
 * 理论上服务端的 MusicService 类对客户端应该是透明的，客户端只需要使用 Service 的功能就可以了。
 * 所以我们稍微更进一步，把 MusicService 抽象出一个接口：MusicInterface。服务端和客户端都有接口类 MusicInterface，但分别实现，客户端是给服务端发消息，服务端真的干活。
 
-##同进程使用Service（二）：还是 IBinder
+
+##同进程使用Service（二）
 * 这一节跟上一节没有本质区别，只是在上节基础上做了一点包装。
 * 让 Service 的 onBind() 函数返回的不光是一个 IBinder，还是一个 MusicInterface。
-* MusicInterface 是个接口，统一封装了 MusicService 的业务函数。客户端和服务端都通过该接口使用业务函数。
+* MusicInterface 是个接口，统一封装了 MusicService 的业务函数。客户端通过该接口使用业务函数。
 
 		:::Java
 		package com.zsl.musicservice;
@@ -253,9 +254,136 @@
 * 解决方式是在 Client 里先 startService(intent) 然后再 bindService(intent, ...)
 * 最后，你会遇到不让强转的问题
 
+##跨进程使用Service（一）：Binder
+* Binder 既然是被设计用来跨进程通信的，那么利用 Binder 一定可以跨进程。
+* 我们上面的例子之所以不能跨进程，是因为我们没有使用到 Binder 跨进程的核心函数：transact() 和 onTransact()
+
+###一、Binder 跨进程原理
+* 对于安卓 OS 来说，Binder 对象是可以跨进程使用的，即一个进程里的 Binder 对象，可以被安卓 OS 传递到另一个进程里。
+* Binder 有两个函数：transact() 发送消息，onTransact() 接收消息。
+* Binder 实现了 IBinder 接口，transact() 是 IBinder 的，onTransact() 是 Binder 的。
+* 利用 transact() 和 onTransact()，我们可以实现跨进程通信。
+
+###二、使用 Binder 跨进程调用 Service
+
+#### 1. 服务端
+* 新建一个 Android 工程作为服务端。
+* 服务端 onBind() 返回的东西仍然继承自 Binder，不过我们这次不必给他添加个函数让客户端拿到 Service 实例了。
+* 我们只需要重写 Binder 的 onTransact() 即可，因为 onTransact() 能收到客户端发来的消息：
+
+		package com.zsl.musicservicebinderipc;
+		
+		import android.app.Service;
+		import android.content.Intent;
+		import android.os.Binder;
+		import android.os.IBinder;
+		import android.os.Parcel;
+		import android.os.RemoteException;
+		import android.util.Log;
+		
+		public class MusicService extends Service {
+		
+		    // 用于让 onBind() 返回的类
+		    // 重写 Binder 的 onTransact()， 用于接收客户端进程发来的消息
+		    public class MyBinder extends Binder {
+		
+				@Override
+				protected boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws RemoteException {
+					switch(code){
+					// 客户端的 transact() 第一个参数是 1 的时候，进行 play()
+					case 1:{
+						play();
+						return true;
+					}
+					}
+					return super.onTransact(code, data, reply, flags);
+				}
+		    }
+		
+		    // 重写 onBind 方法，返回一个 MyBinder 的实例，
+		    // 而 MyBinder 的 getService() 可以拿到 MusicService 实例
+		    @Override
+		    public IBinder onBind(Intent intent) {
+		        return new MyBinder();
+		    }
+		
+		    public void play() {
+		      Log.d("testing", "playing");
+		    }
+		}
+
+* 我们让 onBind() 返回一个 MyBinder。客户端拿到 MyBinder 后，只需调用它的 transact() 方法，第一个参数传1，就能实现调用服务端 play() 的目的。
+
+#### 2. 客户端
+* 新建一个 Android 工程作为客户端。
+* 客户端不再需要强转，它调用服务端 play() 的方式变成：调用从服务端得到的 IBinder 的 transact() 方法，并且第一个参数传1.
+* 这个 1 是服务端和客户端约定好的，代表是 play()。
+* 客户端代码如下：
+
+		package com.zsl.musicclientbinderipc;
+		
+		import android.app.Activity;
+		import android.content.ComponentName;
+		import android.content.Intent;
+		import android.content.ServiceConnection;
+		import android.os.Bundle;
+		import android.os.IBinder;
+		import android.os.Parcel;
+		import android.os.RemoteException;
+		import android.view.View;
+		
+		public class MainActivity extends Activity {
+		    IBinder mService;
+		
+		    // 准备一个 ServiceConnection，用来绑定 Service 并接收 Service onBind() 返回的那个 IBinder。
+		    private ServiceConnection mConnection = new ServiceConnection() {
+		        @Override
+		        public void onServiceConnected(ComponentName className,IBinder service) {
+		            // 把服务端进程返回的 IBinder 保存起来，后续调用它的 transact() 给服务端发消息
+		        	mService = service;
+		        }
+		
+		        @Override
+		        public void onServiceDisconnected(ComponentName name) {
+		        }
+		    };
+		
+		    @Override
+		    protected void onCreate(Bundle savedInstanceState) {
+		        super.onCreate(savedInstanceState);
+		        setContentView(R.layout.activity_main);
+		        Intent intent = new Intent();
+		        intent.setClassName("com.zsl.musicservicebinderipc", "com.zsl.musicservicebinderipc.MusicService");
+		        startService(intent);
+		        bindService(intent, mConnection, BIND_AUTO_CREATE);
+		    }
+		
+		    // 让服务端 play()
+		    public void play(){
+		    	// 调用 transact() 必须提供这两个参数，目前先不必理会
+		    	Parcel data = Parcel.obtain();
+		    	Parcel reply = Parcel.obtain();
+		    	try {
+					// IBinder 的 transact() ，给服务端发消息，服务端的 onTransact() 会处理消息
+					mService.transact(1, data, reply, 0);
+				} catch (RemoteException e) {
+					e.printStackTrace();
+				}
+		    }
+		    
+		    public void btn_play_clicked(View v) {
+		    	play();
+		    }
+		}
 
 
-##跨进程使用Service（一）：AIDL
+###三、小结
+* 客户端程序员需要知道调用 play() 要 transact() 哪些参数，调用 pause() 要传递哪些。。。 要为每个需要用到的方法写一套 transact()
+* 不应该让客户端看到那么多细节，用起来不方便。服务端应该把一切都封装好，让客户端用起来方便。
+* 这样服务端需要封装几个类，把 transact()、onTransact() 包装起来。
+* 安卓为了简化这一个过程，为我们准备了 AIDL
+
+##跨进程使用Service（二）：AIDL
 
 ###一、AIDL 怎么用
 
@@ -331,7 +459,7 @@
 * 记得在项目的 Manifest 文件里写上这个 Service。
 * 另外为了能被远程启动和绑定，最好把该 Service 的 export 搞成 true。
 
-####2. 实现客户端
+####3. 实现客户端
 * 新建一个 Android 工程，作为客户端。
 * 客户端也需要 MusicInterface 这个接口，把 MusicInterface.aidl 拷贝到客户端项目。注意！！ 一定要在客户端建一个跟服务端一样的包，把 MusicInterface.aidl 放到这个包里。
 * 客户端的代码如下：
@@ -398,98 +526,53 @@
 
 		package com.zsl.musicservice2aidl;
 		
-		public interface MusicInterface extends android.os.IInterface {
+		public interface MusicInterface extends IInterface {
 
+			// 1. Stub 类继承了 Binder，实现了 MusicInterface，Service 的 onBind() 只需要返回 Stub 的子类即可
+			// 2. Stub 类是 abstract 的，它并没有实现 MusicInterface 的业务函数 play() 和 pause()，这要交给 Service 去做
+			// 3. Stub 类提供了一个 static 方法 asInterface()，我们在这个方法的注释中再细看，注意它是 static 的
 			public static abstract class Stub extends Binder implements MusicInterface {
 
-				private static final String DESCRIPTOR = "com.zsl.musicservice2aidl.MusicInterface";
-		
-				public Stub() {
-					this.attachInterface(this, DESCRIPTOR);
-				}
-		
-
+				// Stubd 类的 asInterfasce() 方法，这个方法是供客户端使用的，注意它是 static 的，它 return 一个 Proxy
+				// 注意它需要一个参数 IBinder，它根据这个 IBinder new 一个 Proxy，返回给客户端
 				public static MusicInterface asInterface(IBinder obj) {
-					if ((obj == null)) {
-						return null;
-					}
-					IInterface iin = obj.queryLocalInterface(DESCRIPTOR);
-					if (((iin != null) && (iin instanceof MusicInterface))) {
-						return ((MusicInterface) iin);
-					}
 					return new MusicInterface.Stub.Proxy(obj);
 				}
 		
 				@Override
-				public IBinder asBinder() {
-					return this;
-				}
-		
-				@Override
+				// Stub 类实现 onTransact()，根据客户端传来的 code，调用 this.play()、this.pause()
+				// 注意，Stub 的 this.play()、this.pause() 是虚函数，因为 Stub 不负责业务，这两函数交给Stub 的继承者去实现
+				// 继承 Stub 的类，即 Service 设计者要实现的，用于让 onBind() 返回的类
 				public boolean onTransact(int code, Parcel data, Parcel reply, int flags) throws RemoteException {
 					switch (code) {
-					case INTERFACE_TRANSACTION: {
-						reply.writeString(DESCRIPTOR);
-						return true;
+						case TRANSACTION_play: {
+							this.play();
+							return true;
+						}
+						case TRANSACTION_pause: {
+							this.pause();
+							return true;
+						}
 					}
-					case TRANSACTION_play: {
-						data.enforceInterface(DESCRIPTOR);
-						this.play();
-						reply.writeNoException();
-						return true;
-					}
-					case TRANSACTION_pause: {
-						data.enforceInterface(DESCRIPTOR);
-						this.pause();
-						reply.writeNoException();
-						return true;
-					}
-					}
-					return super.onTransact(code, data, reply, flags);
 				}
 		
+				// Proxy 是客户端使用的类，它的 play() 函数其实就是用 mRemote 的 transact() 发消息
+				// mRemote 就是从服务端得到的 IBinder，构造 Proxy 需要它
 				private static class Proxy implements MusicInterface {
 					private IBinder mRemote;
 		
 					Proxy(IBinder remote) {
 						mRemote = remote;
 					}
-		
-					@Override
-					public IBinder asBinder() {
-						return mRemote;
-					}
-		
-					public String getInterfaceDescriptor() {
-						return DESCRIPTOR;
-					}
-		
+			
 					@Override
 					public void play() throws android.os.RemoteException {
-						android.os.Parcel _data = android.os.Parcel.obtain();
-						android.os.Parcel _reply = android.os.Parcel.obtain();
-						try {
-							_data.writeInterfaceToken(DESCRIPTOR);
-							mRemote.transact(Stub.TRANSACTION_play, _data, _reply, 0);
-							_reply.readException();
-						} finally {
-							_reply.recycle();
-							_data.recycle();
-						}
+						mRemote.transact(Stub.TRANSACTION_play, _data, _reply, 0);
 					}
 		
 					@Override
 					public void pause() throws android.os.RemoteException {
-						android.os.Parcel _data = android.os.Parcel.obtain();
-						android.os.Parcel _reply = android.os.Parcel.obtain();
-						try {
-							_data.writeInterfaceToken(DESCRIPTOR);
-							mRemote.transact(Stub.TRANSACTION_pause, _data, _reply, 0);
-							_reply.readException();
-						} finally {
-							_reply.recycle();
-							_data.recycle();
-						}
+						mRemote.transact(Stub.TRANSACTION_pause, _data, _reply, 0);
 					}
 				}
 		
@@ -498,17 +581,30 @@
 			}
 		
 			public void play() throws RemoteException;
-		
 			public void pause() throws RemoteException;
 		}
 
 
-###扩展：传递复杂数据类型：用 AIDL 定义类型
+* 我们把 AIDL 文件复制到客户端工程，客户端也会生成如上的 java 文件。
+* 其实拷贝 AIDL 文件就相当于拷贝了一个 .java 的接口文件。只不过 AIDL 的写法要简洁的多。
+* 服务端负责继承 Stub，实现它的业务函数。而 Stub 本身已经做好了 onTransact()，它把客户端的 play() 分发给继承者的 play().
+* 客户端只需要在绑定 Service 之后，利用安卓OS传回来的 IBinder 作为参数，调用 Stub.asInterface() 就能得到一个 MusicInterface。
+* 后续直接使用它的 play() 即可，感觉就像使用本地函数一样。
+* 客户端程序员不必知道，其实这个 MusicInterface 的 play()，底层调用的是 binder.transact(TRANSACTION_play,..)
+
+###三、小结
+* AIDL 定义的是接口，服务端和客户端使用同样的接口。两端的工程里只要有相同的 AIDL 文件即可。
+* AIDL 书写简单，服务端程序员和客户端程序员都省去了很多麻烦。
+* 其本质上还是使用 Binder 的 transact() 和 onTransact() 进行跨进程通信。
+
+###四、扩展：传递复杂数据类型：用 AIDL 定义类型
+* 我们上面的例子省去了跨进程传递参数的部分
+* 这部分不是本文关注的重点，作为扩展可以自行查资料
 
 
 ##跨进程使用Service（二）：Message
 
-### 1. 回忆一下 Handler 和 Message
+### 一、回忆一下 Handler 和 Message
 * 在UI编程时，我们经常用 Handler 和 Message 处理高耗时任务。
 * 具体方法：
 	* Activity 里弄个 Handler 类型的成员 mHandler。 
@@ -517,7 +613,7 @@
 * 要点： Activity 里的工作线程能拿到 mHander。这很容易，内部类可以通过类名访问外部类。
 
 
-### 2. Messenger
+### 二、 Messenger
 * UI 里只使用了两个类： Handler、Message。 UI 里都是调用 Handler 的 sendMessage(Message msg) 方法，发送一个 Message。然后 Handler 的 handleMessage() 会收到这个 Message 参数。
 * 说白了，这种传递 Message 的方式，是用同一个对象（mHandler）的两个方法（sedMessage(),handleMessage()）在传递 Message。
 * 而同一个对象不可能横跨两个进程，所以我们需要一个新类：Messenger。
@@ -542,9 +638,9 @@
 * 客户端得到这个 IBinder 后，再基于它构建一个自己的 Messenger，这个 Messenger 发的消息，就会被服务端收到了。
 * 注意： 服务端和客户端各有自己的 Messenger 对象，而不是同一个对象。服务端的 Messenger 是基于 Handler 构建，客户端的是基于 IBinder 构建。
 
-### 3. 利用 Messenger 跨进程使用 Service
+### 三、利用 Messenger 跨进程使用 Service
 
-#### 3.1服务端
+#### 1. 服务端
 * 服务端代码如下：
 
 		package com.zsl.musicserver1message;
@@ -581,7 +677,7 @@
 
 * Service 的 Manifest 里要加上这个： `android:exported="true" `
 
-#### 3.2 客户端
+#### 2. 客户端
 * 客户端代码如下：
 
 		package com.zsl.musicclient1message;

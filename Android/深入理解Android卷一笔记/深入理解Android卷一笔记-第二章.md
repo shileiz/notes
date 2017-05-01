@@ -55,7 +55,7 @@
 			{
 				"processFile",
 				"(Ljava/lang/String;Ljava/lang/String;Landroid/media/MediaScannerClient;)V",
-				(void*)android_meida_MediaScanner_processFile,
+				(void*)android_meida_MediaScanner_processFile
 			},
 		
 			{
