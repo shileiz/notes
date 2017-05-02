@@ -1,9 +1,0 @@
-jni c语言层往logcat里写log
-
-参考：http://blog.csdn.net/pkigavin/article/details/8583537
-要点：
-1、#include <android/log.h>
-2、Android.mk 里：LOCAL_LDLIBS := -llog
-3、 __android_log_print(ANDROID_LOG_DEBUG, "YourTag", "Your log here %s", a_c_string_var);
-4、上述函数能把log写入logcat，第一个参数是log级别，第二个是Tag，第三个是log的内容。
-       并且第三个参数可以按照print()的方式进行格式化字符串。
