@@ -139,7 +139,7 @@
 ![](stts-sund.png)
 
 * 图中 stts 只有一个子节点，那是因为本例种所有音频 sample 都有相同的 duration。如上图所示，每个 sample 的时长为 2048，共有 8491 个 sample。8491 正好是本例种的全部音频 sample。
-* 这个 2048 并不是 2048 毫秒，它具体等于多少秒，需要另一个 box 配合才能算出来。即 mdia->mdhd box。每个 track 有自己的 mdhd box，mdhd box 有一个 TimeScale 属性。比如本例中音频 track 的 TimeScale = 44100。入下图所示：
+* 这个 2048 并不是 2048 毫秒，它具体等于多少秒，需要另一个 box 配合才能算出来。即 mdia->mdhd box。每个 track 有自己的 mdhd box，mdhd box 有一个 TimeScale 属性。比如本例中音频 track 的 TimeScale = 44100。如下图所示：
 
 ![](timescale-sund.png)
 
@@ -180,7 +180,7 @@
 
 ### 为什么要减小 moov 的体积？
 * 因为必须有了整个 moov box 视频才能播起来，为什么呢？
-* 因为必须有了整个 stb box 包涵在 moov 里 ，stbl box 视频才能播起来，为什么呢？
+* 因为 stbl box 包涵在 moov 里 ，而必须有了整个 stbl box 视频才能播起来，为什么呢？
 * 因为有了 stbl box 才能知道想要播放的音频/视频 sample 在文件的第几个字节，才能去拿过来解封装、解码、显示。
 * 所以，对于在线视频来说，moov box 的体积一定要小，才能提高起播速度。不过 mp4 文件标准就决定了 moov box 不可能太小。
 
@@ -189,7 +189,7 @@
 * 而 stbl 的大小主要取决于 sample 的个数，sample 的个数又主要取决于时长。
 
 ### 如何减少 moov 的体积？
-* 可以参考这篇：[https://lark.alipay.com/nxqrq1/syn554/fz6d1i](https://lark.alipay.com/nxqrq1/syn554/fz6d1i)
+* 可以参考这篇：[如何正确处理MP4文件中的大文件头](https://lark.alipay.com/nxqrq1/syn554/fz6d1i)
 
 ## 附录：实验环境
 
