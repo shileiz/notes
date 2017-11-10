@@ -1,4 +1,7 @@
 ##Java层的 setDataSource 会走到哪个 native 函数
+>参考 5.1.0_r1 的源码： 
+>http://androidxref.com/5.1.0\_r1/xref/frameworks/base/media/java/android/media/MediaPlayer.java
+
 * java 层的 setDataSource() 有5个重载，我们只看其中这一个：`setDataSource(String path)`
 * 它会先走到重载的 `setDataSource(path, null, null)`, 然后在这里有个分叉
 
@@ -9,27 +12,42 @@
 * 我们这里只看是 file 的情况，不是 file 的，我们在另外一篇单看。
 
 ##native 的 setDataSource()
-* 对应 file，会走到的 native 函数是： `private native void _setDataSource(FileDescriptor fd, long offset, long length)`。 它在JNI层的实现是 `android_media_MediaPlayer_setDataSourceFD(env,thiz,fd,offset,length)`
+* 对应 file，会走到的 native 函数是：
+
+>位于文件 frameworks/base/media/jni/android_media_MediaPlayer.cpp
+
+```
+private native void _setDataSource(FileDescriptor fd, long offset, long length);
+```
+
+* 它在JNI层的实现是:
+
+```C++
+// frameworks/base/media/jni/android_media_MediaPlayer.cpp
+android_media_MediaPlayer_setDataSourceFD(env,thiz,fd,offset,length)
+```
 * 因为我们没有传 offset 和 length（我们只传了一个 path，java层根据这个 path 生成了 fd），java 层把 offset 设成了 0，length 设成了 0x7ffffffffffffffL —— 一个巨大的数。
 * 下面来看这个 native 方法。
 
-		static void
-		android_media_MediaPlayer_setDataSourceFD(JNIEnv *env, jobject thiz, jobject fileDescriptor, jlong offset, jlong length)
-		{
-		    sp<MediaPlayer> mp = getMediaPlayer(env, thiz); // 1.
-		    if (mp == NULL ) {
-		        jniThrowException(env, "java/lang/IllegalStateException", NULL);
-		        return;
-		    }
-		
-		    if (fileDescriptor == NULL) {
-		        jniThrowException(env, "java/lang/IllegalArgumentException", NULL);
-		        return;
-		    }
-		    int fd = jniGetFDFromFileDescriptor(env, fileDescriptor);
-		    ALOGV("setDataSourceFD: fd %d", fd);
-		    process_media_player_call( env, thiz, mp->setDataSource(fd, offset, length), "java/io/IOException", "setDataSourceFD failed." ); // 2.
-		}
+```C++
+static void
+android_media_MediaPlayer_setDataSourceFD(JNIEnv *env, jobject thiz, jobject fileDescriptor, jlong offset, jlong length)
+{
+    sp<MediaPlayer> mp = getMediaPlayer(env, thiz); // 1.
+    if (mp == NULL ) {
+        jniThrowException(env, "java/lang/IllegalStateException", NULL);
+        return;
+    }
+	
+    if (fileDescriptor == NULL) {
+        jniThrowException(env, "java/lang/IllegalArgumentException", NULL);
+        return;
+    }
+    int fd = jniGetFDFromFileDescriptor(env, fileDescriptor);
+    ALOGV("setDataSourceFD: fd %d", fd);
+    process_media_player_call( env, thiz, mp->setDataSource(fd, offset, length), "java/io/IOException", "setDataSourceFD failed." ); // 2.
+}
+```
 
 ####1. mp = getMediaPlayer() 
 * 上来是个 getMediaPlayer()，这个函数没什么，就是从 java 的 mp 对象里拿到它的 mNativeContext 的值，强转成(MediaPlayer*)类型，返回。
@@ -286,7 +304,7 @@
 		    return mStatus;
 		}
 
-* 以上就是 mediaserver 进程里真正干活的 setDataSource()了，其中要点就是 (a).，(b).，(c).，跟我们最开那张图想对应。
+* 以上就是 mediaserver 进程里真正干活的 setDataSource()了，其中要点就是 (a).，(b).，(c).，跟我们最开始那张图想对应。
 
 ##### (a). MediaPlayerFactory::getPlayerType(this,fd,offset,length)
 * 文件位置：`av/media/libmediaplayerservice/MediaPlayerFactory.h`， `av/media/libmediaplayerservice/MediaPlayerFactory.cpp`

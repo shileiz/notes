@@ -592,13 +592,13 @@
 		* `adb forward tcp:6669 tcp:5039`
 		* 注意：端口号可以自选，写在前面的是 PC 上的端口号，写在后面的是手机上的。需要记住这2个端口号，后续启动 gdbserver 时需要指定手机上的端口号，启动 gdb 时需要指定PC上的端口号。
 	* 启动 gdbserver:
-		* `adb shell /data/data/com.yourpackage.xxx/gdbserver ：5039  --attach 6844`
+		* `adb shell /data/data/com.yourpackage.xxx/gdbserver :5039  --attach 6844`
 	* 注意，必须让 gdbserver 监听某个端口，这个端口就是之前我们映射的 tcp:5039
 	* 注意，启动时必须让 gdbserver attach 到某个进程上，就是我们之前 ps 出来的被 debug 进程。
 	* 启动 gdb:
 		*  gdb.exe 在这里：`android-ndk-r13b\prebuilt\windows-x86_64\bin`
 		* `gdb.exe`,进入 gdb 命令行
-		* `target remote 127.0.0.1:5039` 连接设备上的 gdbserver
+		* `target remote 127.0.0.1:6669` 连接设备上的 gdbserver
 	* 至此，大功告成，终于可以在电脑上 gdb 手机上的程序了。不过 gdb 连上 gdbserver 后报了一大堆警告，说找不到库或者符号之类的。
 	* 如果是找不到符号，肯定是你使用了现成的的库，而不是你从源码编译出来的，所以这些库在编译的时候没有加 debug 选项，自然找不到符号。
 	* 如果是找不到库，可能是环境变量没有设。
